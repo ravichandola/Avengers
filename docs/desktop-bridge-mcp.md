@@ -95,11 +95,11 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 ### Tool 3: `screenshot`
 
-**Capture a screenshot** of the desktop. Returns base64-encoded PNG.
+**Capture a PID-scoped screenshot** of the target app window. The bridge focuses the app first, then captures only that window (not full desktop). Returns base64-encoded PNG.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `appName` | string | Application to bring to front before capturing |
+| `appName` | string | Application to focus and capture |
 
 **Returns:** Base64 PNG image.
 
@@ -109,7 +109,7 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 ### Tool 4: `describe_screen`
 
-**Screenshot + GPT-4o vision** to describe what's on screen in natural language.
+**Window screenshot + GPT-4o vision** to describe what's visible in the target app, not ambient desktop UI.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -123,7 +123,7 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 ### Tool 5: `locate_element`
 
-**Vision-based element location** — describe an element in natural language, get its center coordinates.
+**Vision-based element location** — describe an element in natural language, get translated screen coordinates that are safe to click.
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -132,12 +132,21 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Example response:**
 ```json
-{ "x": 450, "y": 320 }
+{
+  "screen": { "x": 450, "y": 320 },
+  "image": { "x": 900, "y": 640 },
+  "bounds": { "x": 100, "y": 80, "width": 1280, "height": 900, "scale": 2 }
+}
 ```
 
 **Requires:** `OPENAI_API_KEY` in environment.
 
-**Use case:** When AX tree selectors are insufficient and you need coordinate-based interaction.
+**Use case:** When AX tree selectors are insufficient and you need coordinate-based interaction with bounds/DPI-safe translation.
+
+**Safety behavior:**
+- Focus is PID-verified before capture.
+- Coordinates are mapped image-space -> screen-space via window bounds and scale.
+- If mapped coordinates fall outside the target window, the tool returns an error (hallucination guard).
 
 ---
 

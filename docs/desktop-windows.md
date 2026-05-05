@@ -36,12 +36,19 @@ metadata: { platform: 'windows' }
 |--------|---------|
 | **`name`** | **Required** — window/application identification string your adapter uses |
 | `pid` | Optional process attachment when supported |
+| `windowState` | Optional: `normal` \| `maximized` \| `fullscreen` (default is `maximized`) |
 
 Example:
 
 ```typescript
-await app.launch({ name: 'Notepad' });
+await app.launch({ name: 'Notepad', windowState: 'maximized' });
 ```
+
+### Window-state behavior on Windows
+
+- `maximized` (default): uses `ShowWindow(SW_MAXIMIZE)` on the resolved app window.
+- `fullscreen`: applies borderless fullscreen (monitor-sized, caption/border removed).
+- `normal`: no post-launch window-state change.
 
 ## Running tests
 
@@ -90,7 +97,27 @@ test.skip(process.platform !== 'win32', 'Windows only');
 |-------|----------------|
 | Runner is macOS / Linux | Use `--project=desktop-windows` only on Windows |
 | Element not found | Prefer stable **AutomationId** in the app; align selector naming with adapter |
-| Flaky focus | Bring window to foreground if adapter exposes it; add retries via config |
+| Flaky focus | Driver now auto-focuses before click/fill/keyPress and verifies foreground ownership by PID |
+
+## Vision safety model
+
+For vision fallback on desktop:
+
+1. Window focus is PID-verified.
+2. Capture is window-scoped (not whole desktop).
+3. Coordinates are translated from image-space to screen-space using bounds + DPI scale.
+4. Out-of-window coordinates are rejected.
+
+This reduces cross-app misclick risk when multiple windows are visible.
+
+## Disposable driver usage
+
+```typescript
+import { createDesktopApp } from '../src/drivers/desktop/desktop-driver';
+
+await using app = await createDesktopApp({ name: 'Notepad', windowState: 'maximized' });
+await app.fill('text_editor', 'Hello from automation');
+```
 
 ## Related
 

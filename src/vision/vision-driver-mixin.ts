@@ -1,6 +1,7 @@
 import { IDriver } from '../core/base-driver';
 import { LaunchOptions, WaitOptions, UIElement } from '../core/types';
 import { VisionProvider } from './vision-provider';
+import { acquireVisionContext, imageToScreen, VisionContext } from './vision-context';
 import { logger } from '../utils/logger';
 
 /**
@@ -77,8 +78,8 @@ export class VisionDriverWrapper implements IDriver {
       const timeout = opts?.timeout ?? 10000;
       const start = Date.now();
       while (Date.now() - start < timeout) {
-        const screenshot = await this.inner.screenshot();
-        const visible = await this.vision.isElementVisible(screenshot, selector);
+        const ctx = await acquireVisionContext(this.inner);
+        const visible = await this.vision.isElementVisible(ctx.screenshot, selector);
         if (visible) return;
         await new Promise(r => setTimeout(r, 1000));
       }
@@ -150,8 +151,8 @@ export class VisionDriverWrapper implements IDriver {
 
     logger.info('VisionFallback', `isVisible("${selector}") checking via vision...`);
     try {
-      const screenshot = await this.inner.screenshot();
-      return await this.vision.isElementVisible(screenshot, selector);
+      const ctx = await acquireVisionContext(this.inner);
+      return await this.vision.isElementVisible(ctx.screenshot, selector);
     } catch {
       return false;
     }
@@ -170,14 +171,41 @@ export class VisionDriverWrapper implements IDriver {
     return this.vision;
   }
 
+  /**
+   * PID-anchored vision locate. Pipeline:
+   *   1. acquireVisionContext → focus + window-scoped screenshot + bounds
+   *   2. Ask vision for image-pixel coordinates inside that screenshot
+   *   3. imageToScreen → translate to screen logical coords using bounds + scale
+   *   4. Bounds-clip rejects coords that fall outside the target window
+   *
+   * The result is a coord that, when fed to clickAtCoordinates, lands inside
+   * the same PID's window we screenshot — no chance of drift to another app.
+   */
   private async locateViaVision(selector: string): Promise<{ x: number; y: number } | null> {
+    let ctx: VisionContext;
     try {
-      const screenshot = await this.inner.screenshot();
-      return await this.vision.locateElement(screenshot, selector);
+      ctx = await acquireVisionContext(this.inner);
     } catch (err) {
-      logger.error('VisionFallback', `Vision location failed: ${err}`);
+      logger.error('VisionFallback', `acquire context failed: ${err}`);
       return null;
     }
+
+    const imgCoords = await this.vision.locateElement(ctx.screenshot, selector);
+    if (!imgCoords) return null;
+
+    const screenCoords = imageToScreen(imgCoords.x, imgCoords.y, ctx);
+    if (!screenCoords) {
+      logger.warn(
+        'VisionFallback',
+        `vision returned coords outside window for "${selector}" (PID ${ctx.pid}) — rejecting`,
+      );
+      return null;
+    }
+    logger.info(
+      'VisionFallback',
+      `located "${selector}" img(${imgCoords.x},${imgCoords.y}) → screen(${screenCoords.x},${screenCoords.y})`,
+    );
+    return screenCoords;
   }
 
   private async clickAtCoordinates(x: number, y: number): Promise<void> {

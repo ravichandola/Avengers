@@ -6,7 +6,8 @@ import * as path from 'path';
 import { MacOSAdapter } from '../src/drivers/desktop/macos-adapter';
 import { WindowsAdapter } from '../src/drivers/desktop/windows-adapter';
 import { VisionProvider } from '../src/vision/vision-provider';
-import { UIElement } from '../src/core/types';
+import { UIElement, WindowBounds } from '../src/core/types';
+import { readPngSize } from '../src/utils/image';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -183,19 +184,65 @@ server.tool(
   },
 );
 
+// ── PID-anchored vision capture ────────────────────────────────────────────
+//
+// All vision tools below funnel through `captureWindow()`. This guarantees:
+//   • The target app's PID owns the foreground before the screenshot
+//   • Only that PID's window pixels are captured (no dock / status bar / leak)
+//   • The window's logical bounds + pixel scale are returned alongside the
+//     image so coords can be translated back to clickable screen coords.
+
+interface WindowSnapshot {
+  buf: Buffer;
+  imageWidth: number;
+  imageHeight: number;
+  bounds: WindowBounds | null;
+}
+
+async function captureWindow(appName: string): Promise<WindowSnapshot> {
+  await ensureConnected(appName);
+  await adapter.focusForVision();
+  const bounds = await adapter.getWindowBounds();
+  const buf = await adapter.screenshotWindow();
+  const dim = readPngSize(buf) ?? { width: 0, height: 0 };
+  return { buf, imageWidth: dim.width, imageHeight: dim.height, bounds };
+}
+
+function imageToScreenCoord(
+  imgX: number, imgY: number, snap: WindowSnapshot,
+): { x: number; y: number } | null {
+  if (!snap.bounds || snap.imageWidth === 0 || snap.imageHeight === 0) {
+    return { x: Math.round(imgX), y: Math.round(imgY) };
+  }
+  const sx = snap.imageWidth / snap.bounds.width;
+  const sy = snap.imageHeight / snap.bounds.height;
+  if (sx <= 0 || sy <= 0) return null;
+  const screenX = snap.bounds.x + imgX / sx;
+  const screenY = snap.bounds.y + imgY / sy;
+  const margin = 2;
+  if (
+    screenX < snap.bounds.x - margin ||
+    screenX > snap.bounds.x + snap.bounds.width + margin ||
+    screenY < snap.bounds.y - margin ||
+    screenY > snap.bounds.y + snap.bounds.height + margin
+  ) {
+    return null;
+  }
+  return { x: Math.round(screenX), y: Math.round(screenY) };
+}
+
 // ── Tool 3: screenshot ──────────────────────────────────────────────────────
 
 server.tool(
   'screenshot',
-  'Capture a screenshot of the desktop. Returns base64-encoded PNG.',
+  'Capture a PID-scoped screenshot of the target app\'s primary window. The app is focused first so its window is on top, and only that window is captured (no dock / status bar / overlapping apps). Returns base64-encoded PNG.',
   {
-    appName: z.string().describe('Application to bring to front before capturing'),
+    appName: z.string().describe('Application to focus and capture'),
   },
   async ({ appName }) => {
     try {
-      await ensureConnected(appName);
-      const buf = await adapter.screenshot();
-      if (buf.length === 0) {
+      const snap = await captureWindow(appName);
+      if (snap.buf.length === 0) {
         return {
           content: [{ type: 'text' as const, text: 'Screenshot captured but was empty (check Screen Recording permission).' }],
           isError: true,
@@ -204,7 +251,7 @@ server.tool(
       return {
         content: [{
           type: 'image' as const,
-          data: buf.toString('base64'),
+          data: snap.buf.toString('base64'),
           mimeType: 'image/png',
         }],
       };
@@ -221,9 +268,9 @@ server.tool(
 
 server.tool(
   'describe_screen',
-  'Take a screenshot and use GPT-4o vision to describe what is on screen. Requires OPENAI_API_KEY.',
+  'Focus the target app, capture only its window, and use GPT-4o vision to describe what is shown. Window-scoped capture means the description is about THIS app, not whatever happens to be on screen. Requires OPENAI_API_KEY.',
   {
-    appName: z.string().describe('Application to screenshot and describe'),
+    appName: z.string().describe('Application to describe'),
   },
   async ({ appName }) => {
     if (!vision.isAvailable()) {
@@ -233,9 +280,8 @@ server.tool(
       };
     }
     try {
-      await ensureConnected(appName);
-      const buf = await adapter.screenshot();
-      const description = await vision.describeScreen(buf);
+      const snap = await captureWindow(appName);
+      const description = await vision.describeScreen(snap.buf);
       return {
         content: [{ type: 'text' as const, text: description }],
       };
@@ -252,7 +298,7 @@ server.tool(
 
 server.tool(
   'locate_element',
-  'Use GPT-4o vision to find a UI element by description and return its center coordinates. Requires OPENAI_API_KEY.',
+  'Find a UI element by natural-language description in the target app\'s window. Returns SCREEN-SPACE LOGICAL coordinates (ready to click) translated from image-pixel coords using the captured window bounds + DPI scale. Returns null if the located coord falls outside the window (hallucination guard). Requires OPENAI_API_KEY.',
   {
     appName: z.string().describe('Application to search in'),
     description: z.string().describe('Natural-language description of the element (e.g. "the Save button", "email text field")'),
@@ -265,16 +311,32 @@ server.tool(
       };
     }
     try {
-      await ensureConnected(appName);
-      const buf = await adapter.screenshot();
-      const coords = await vision.locateElement(buf, desc);
-      if (!coords) {
+      const snap = await captureWindow(appName);
+      const imgCoords = await vision.locateElement(snap.buf, desc);
+      if (!imgCoords) {
         return {
           content: [{ type: 'text' as const, text: `Element not found on screen: "${desc}"` }],
         };
       }
+      const screenCoords = imageToScreenCoord(imgCoords.x, imgCoords.y, snap);
+      if (!screenCoords) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Element appeared to be located outside window bounds — likely a vision hallucination. Image coord: ${JSON.stringify(imgCoords)}, window: ${JSON.stringify(snap.bounds)}`,
+          }],
+          isError: true,
+        };
+      }
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(coords) }],
+        content: [{
+          type: 'text' as const,
+          text: JSON.stringify({
+            screen: screenCoords,
+            image: imgCoords,
+            bounds: snap.bounds,
+          }),
+        }],
       };
     } catch (err) {
       return {

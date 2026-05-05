@@ -72,6 +72,14 @@ export const test = base.extend<TestFixtures>({
         const taggedDesktopApp = getTaggedValue(testInfo.title, 'app');
         if (taggedDesktopApp || metadata.desktop?.appName) {
           target.name = taggedDesktopApp ?? metadata.desktop.appName;
+          // Default desktop apps to maximized for predictable layouts.
+          // Override per-test with @windowState=normal|fullscreen|maximized
+          // or per-project via metadata.desktop.windowState.
+          const taggedState = getTaggedValue(testInfo.title, 'windowState')?.toLowerCase();
+          target.windowState =
+            (taggedState as LaunchOptions['windowState']) ??
+            metadata.desktop?.windowState ??
+            'maximized';
         } else {
           shouldLaunch = false;
         }

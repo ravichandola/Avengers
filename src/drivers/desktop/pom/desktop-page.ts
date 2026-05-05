@@ -1,22 +1,8 @@
-import { DesktopDriver } from '../desktop-driver';
-import { ElementRef } from '../../../pom/element-ref';
-import { DriverPage } from '../../../pom/driver-page';
+import { DesktopDriver } from "../desktop-driver";
+import { ElementRef } from "../../../pom/element-ref";
+import { DriverPage } from "../../../pom/driver-page";
+import { FocusOptions } from "../../../core/types";
 
-/**
- * Desktop POM base — locators top pe define karo, methods me use karo.
- *
- * ```ts
- * class SettingsWindow extends DesktopPage {
- *   readonly closeBtn     = this.element('close_button');
- *   readonly volumeSlider = this.element('volume_slider');
- *   readonly darkMode     = this.element('dark_mode_toggle');
- *
- *   async enableDarkMode() {
- *     await this.darkMode.click();
- *   }
- * }
- * ```
- */
 export abstract class DesktopPage extends DriverPage {
   constructor(protected readonly driver: DesktopDriver) {
     super(driver);
@@ -37,5 +23,24 @@ export abstract class DesktopPage extends DriverPage {
 
   async keyPress(key: string): Promise<void> {
     await this.driver.keyPress(key);
+  }
+
+  /**
+   * Bring this app to the foreground (PID-scoped) and verify it owns the
+   * focus before continuing. Use at the start of a flow or before any
+   * keyboard-sensitive sequence.
+   */
+  async focus(opts?: FocusOptions): Promise<boolean> {
+    return this.driver.focus(opts);
+  }
+
+  /** True iff the OS reports our PID as owning the foreground window. */
+  async isFocused(): Promise<boolean> {
+    return this.driver.isFocused();
+  }
+
+  /** Focus only if needed — cheap when already focused. */
+  async ensureFocused(opts?: FocusOptions): Promise<boolean> {
+    return this.driver.ensureFocused(opts);
   }
 }

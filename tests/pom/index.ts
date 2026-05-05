@@ -6,3 +6,5 @@ export { IosLoginScreen } from './mobile/ios-login-screen';
 export { AppleTVSignInScreen } from './desktop/apple-tv-signin-screen';
 export { JsonPlaceholderPosts } from './api/jsonplaceholder-posts';
 export { CalculatorScreen } from './desktop/calculator-screen';
+export { CursorScreen } from './desktop/cursor-screen';
+export { AppStoreNetflixSearchScreen } from './desktop/app-store-netflix-search-screen';

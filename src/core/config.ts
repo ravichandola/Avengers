@@ -1,4 +1,4 @@
-import { Platform } from './types';
+import { Platform, WindowState } from './types';
 
 export interface FrameworkConfig {
   platform: Platform;
@@ -23,6 +23,8 @@ export interface DesktopConfig {
   appPath?: string;
   pid?: number;
   useVisionFallback?: boolean;
+  /** Initial window state on launch. Default: `"maximized"`. */
+  windowState?: WindowState;
 }
 
 export interface MobileConfig {

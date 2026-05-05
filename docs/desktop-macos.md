@@ -36,12 +36,19 @@ That makes `DriverFactory` build a **`DesktopDriver`** with macOS adapters.
 |--------|---------|
 | **`name`** | **Required** — application name as understood by the adapter (e.g. `'TV'` for Apple TV) |
 | `pid` | Optional attach by process id if your adapter supports it |
+| `windowState` | Optional: `normal` \| `maximized` \| `fullscreen` (default is `maximized`) |
 
 Example:
 
 ```typescript
-await app.launch({ name: 'TV' });
+await app.launch({ name: 'TV', windowState: 'maximized' });
 ```
+
+### Window-state behavior on macOS
+
+- `maximized` (default): adapter resizes window to visible desktop bounds (menu bar + dock aware).
+- `fullscreen`: toggles `AXFullScreen=true` (native macOS fullscreen / separate Space).
+- `normal`: no post-launch resize/fullscreen action.
 
 ## Running tests
 
@@ -113,6 +120,28 @@ APPLE_TV_EMAIL='you@example.com' APPLE_TV_PASSWORD='***' \
 ## Vision fallback
 
 If configured, failed structured steps may fall back to vision-based coordinates. Requires **`OPENAI_API_KEY`** when vision is enabled.
+
+Desktop vision is PID-safe by design:
+
+1. App is focused with PID verification.
+2. Window-only screenshot is captured.
+3. Vision returns image coordinates.
+4. Framework maps coordinates back to screen-space using bounds + scale and rejects out-of-window points.
+
+This avoids accidental interaction with another frontmost app/window.
+
+## Disposable driver usage
+
+You can use `await using` for automatic cleanup:
+
+```typescript
+import { createDesktopApp } from '../src/drivers/desktop/desktop-driver';
+
+await using app = await createDesktopApp({ name: 'Notes', windowState: 'maximized' });
+await app.click('New Note');
+```
+
+`close()` is called automatically when scope exits.
 
 ## Troubleshooting
 

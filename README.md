@@ -56,12 +56,18 @@ test("login on web", async ({ app }) => {
 
 ```typescript
 test("login on macOS app", async ({ app }) => {
-  await app.launch({ name: "MyApp" });
+  await app.launch({ name: "MyApp", windowState: "maximized" });
   await app.click("signin_button");
   await app.fill("email_field", "user@test.com");
   await app.click("submit");
 });
 ```
+
+Desktop window state options:
+
+- `normal` — leave as-is
+- `maximized` — default for desktop launches
+- `fullscreen` — OS fullscreen
 
 ### Mobile (same API)
 
@@ -190,6 +196,7 @@ How it works:
 
 Notes about reliability:
 
+- Desktop vision capture is PID-anchored: framework focuses the target app first, captures only that app window, translates image coordinates to screen coordinates using window bounds/DPI scale, and rejects out-of-bounds hallucinated points.
 - If the vision provider is unavailable (quota/auth/network), vision-heavy tests can be marked as `skipped` instead of failing the whole suite.
 - Keep at least one non-vision desktop flow test so CI remains stable even when vision API is temporarily unavailable.
 
@@ -222,3 +229,19 @@ APPLE_TV_PASSWORD=...
 API_BASE_URL=...         # Override API base URL
 APPIUM_RUNNING=true      # Enable mobile tests
 ```
+
+## Disposable desktop context
+
+Desktop driver supports async disposal (`TS 5.2+`):
+
+```typescript
+import { createDesktopApp } from "./src/drivers/desktop/desktop-driver";
+
+await using app = await createDesktopApp({
+  name: "Notes",
+  windowState: "maximized",
+});
+await app.click("New Note");
+```
+
+`close()` runs automatically when scope exits.

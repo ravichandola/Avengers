@@ -99,6 +99,7 @@ In **`src/fixtures/index.ts`**:
 3. If **`autoLaunch`** is true, calls **`driver.launch(target)`**:
    - Browser: open context/page, optionally `goto(baseURL)`
    - Desktop: connect to process by **app name** from `@app=MyApp` tag or `DESKTOP_APP_NAME` / metadata
+     - Default desktop launch state is `windowState: "maximized"` (override via `@windowState=...` or metadata / explicit launch option)
    - Mobile: bundleId / app package
    - API: “launch” = remember base URL
 4. **`await use(driver)`** runs your test.
@@ -250,6 +251,7 @@ Load order:
 | File / variable | Effect |
 |-----------------|--------|
 | `DESKTOP_APP_NAME` | Default desktop app when test has no `@app=` |
+| `metadata.desktop.windowState` / `@windowState=` | Initial desktop window state (`normal`/`maximized`/`fullscreen`) |
 | `BROWSER_BASE_URL` / `BASE_URL` | Browser navigation target |
 | `API_BASE_URL` | API driver base URL |
 | `TIMEOUT`, `RETRIES` | Playwright timeout / retries |
@@ -328,6 +330,8 @@ Use this section when copying ideas into **JUnit + Appium**, **Pytest + Playwrig
 | `src/drivers/desktop/desktop-driver.ts` | Desktop `IDriver` façade |
 | `src/drivers/desktop/macos-adapter.ts` | macOS implementation details |
 | `src/drivers/desktop/windows-adapter.ts` | Windows implementation details |
+| `src/vision/vision-context.ts` | PID-anchored vision capture context + coordinate translation |
+| `src/utils/image.ts` | PNG dimension reader used for scale-aware vision mapping |
 | `src/pom/driver-page.ts` | **Shared POM base + LLM judge + eval pipeline** |
 | `src/pom/element-ref.ts` | Lazy element actions |
 | `src/eval/types.ts` | `EvalLabel`, `JudgeRequest`, `AlignmentEntry`, `LlmConfig` |

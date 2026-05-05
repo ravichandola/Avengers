@@ -1,26 +1,26 @@
 export type Platform =
-  | 'chromium'
-  | 'firefox'
-  | 'webkit'
-  | 'macos'
-  | 'windows'
-  | 'ios'
-  | 'android'
-  | 'api';
+  | "chromium"
+  | "firefox"
+  | "webkit"
+  | "macos"
+  | "windows"
+  | "ios"
+  | "android"
+  | "api";
 
 export type ActionType =
-  | 'click'
-  | 'fill'
-  | 'getText'
-  | 'waitFor'
-  | 'hover'
-  | 'scroll'
-  | 'keyPress'
-  | 'screenshot'
-  | 'navigate'
-  | 'select'
-  | 'check'
-  | 'uncheck';
+  | "click"
+  | "fill"
+  | "getText"
+  | "waitFor"
+  | "hover"
+  | "scroll"
+  | "keyPress"
+  | "screenshot"
+  | "navigate"
+  | "select"
+  | "check"
+  | "uncheck";
 
 export interface ActionResult {
   success: boolean;
@@ -52,7 +52,7 @@ export interface BoundingBox {
 
 export interface WaitOptions {
   timeout?: number;
-  state?: 'visible' | 'hidden' | 'attached' | 'detached';
+  state?: "visible" | "hidden" | "attached" | "detached";
 }
 
 export interface LaunchOptions {
@@ -65,7 +65,11 @@ export interface LaunchOptions {
   appActivity?: string;
   authProfile?: string;
   storageStatePath?: string;
+
+  windowState?: WindowState;
 }
+
+export type WindowState = "normal" | "maximized" | "fullscreen";
 
 export interface APIResponse {
   status: number;
@@ -79,4 +83,19 @@ export interface RequestOptions {
   headers?: Record<string, string>;
   params?: Record<string, string>;
   timeout?: number;
+}
+
+export interface FocusOptions {
+  restore?: boolean;
+  verify?: boolean;
+  timeoutMs?: number;
+  retries?: number;
+}
+
+export interface WindowBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  scale: number;
 }
