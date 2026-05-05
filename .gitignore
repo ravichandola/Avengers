@@ -1,0 +1,15 @@
+node_modules/
+dist/
+*.tsbuildinfo
+# All env files (contain secrets / machine-specific config)
+.env
+browser.env
+api.env
+desktop.env
+mobile.env
+.DS_Store
+coverage/
+*.log
+.auth/
+.checkpoints/
+test-results/

@@ -1,0 +1,81 @@
+---
+description: Rules for generating desktop automation tests using the desktop-bridge MCP server
+globs:
+  - tests/desktop/**/*.ts
+  - tests/pom/desktop/**/*.ts
+alwaysApply: false
+---
+
+# Desktop Automation — Cursor Agent Rules
+
+## MCP tools available
+
+You have access to a **desktop-bridge** MCP server with these tools:
+
+| Tool | Purpose |
+|------|---------|
+| `scan_app` | Connect to a running macOS/Windows app by name, returns title + platform |
+| `get_elements` | Read the live Accessibility tree (roles, names, bounds) |
+| `screenshot` | Capture the current screen as base64 PNG |
+| `describe_screen` | Vision-based description of what's on screen (needs OPENAI_API_KEY) |
+| `locate_element` | Find element coordinates by natural-language description (needs OPENAI_API_KEY) |
+| `generate_pom` | Scan app and write a DesktopPage POM class to `tests/pom/desktop/` |
+| `generate_test` | Scaffold a `.desktop.spec.ts` test file that imports a POM |
+
+## Workflow for writing desktop tests
+
+1. **Scan the app** — call `scan_app` with the app name to verify it's running.
+2. **Read elements** — call `get_elements` to get the full AX tree. Use this to understand what selectors are available.
+3. **Generate POM** — call `generate_pom` to create a page object class, or write one manually extending `DesktopPage`.
+4. **Write the test** — call `generate_test` for scaffolding, then fill in the test steps using POM methods.
+
+## File conventions
+
+- **POMs** go in `tests/pom/desktop/<kebab-class-name>.ts`
+- **Tests** go in `tests/desktop/<kebab-app-name>.desktop.spec.ts`
+- Re-export POMs from `tests/pom/index.ts`
+
+## POM structure
+
+```typescript
+import { DesktopPage } from '../../../src/drivers/desktop/pom/desktop-page';
+import { DesktopDriver } from '../../../src/drivers/desktop/desktop-driver';
+
+export class MyAppScreen extends DesktopPage {
+  readonly someButton = this.element('Button Label from AX');
+  readonly someField  = this.element('Text Field Name');
+
+  constructor(driver: DesktopDriver) {
+    super(driver);
+  }
+
+  async doSomething(): Promise<void> {
+    await this.someButton.click();
+  }
+}
+```
+
+## Test structure
+
+```typescript
+import { test, expect } from '../../src/fixtures';
+
+test.describe('AppName - Feature', () => {
+  test.skip(process.platform !== 'darwin', 'macOS only');
+
+  test('does something @app=AppName', async ({ app }) => {
+    const title = await app.getTitle();
+    expect(title.length).toBeGreaterThan(0);
+  });
+});
+```
+
+## Key rules
+
+- Always add `test.skip(process.platform !== 'darwin', 'macOS only')` for macOS-specific tests.
+- Use the `@app=AppName` tag in test titles so the fixture auto-launches the correct app.
+- Import from `../../src/fixtures` — not from `@playwright/test` directly.
+- Prefer AX selectors (element names/labels from `get_elements`) over vision-based coordinates.
+- Use vision (`describe_screen`, `locate_element`) only as a fallback when AX selectors are insufficient.
+- Never hardcode credentials — use environment variables and `test.skip()` guards.
+- Selectors are the **name** or **label** strings from the Accessibility tree, not CSS selectors.

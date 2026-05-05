@@ -1,0 +1,11 @@
+{
+  "className": "SamplePostsApi",
+  "comment": "jsonplaceholder.typicode.com",
+  "endpoints": [
+    { "name": "list", "method": "get", "path": "/posts" },
+    { "name": "getById", "method": "get", "path": "/posts/:id" },
+    { "name": "create", "method": "post", "path": "/posts" },
+    { "name": "update", "method": "put", "path": "/posts/:id" },
+    { "name": "remove", "method": "delete", "path": "/posts/:id" }
+  ]
+}

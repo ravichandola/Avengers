@@ -1,0 +1,7 @@
+{
+  "elements": [
+    { "property": "signInButton", "selector": "Sign In" },
+    { "selector": "Apple ID email field" },
+    { "selector": "Password" }
+  ]
+}

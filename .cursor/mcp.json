@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "desktop-bridge": {
+      "command": "npx",
+      "args": [
+        "ts-node",
+        "--project",
+        "mcp/tsconfig.json",
+        "mcp/desktop-bridge.ts"
+      ]
+    }
+  }
+}

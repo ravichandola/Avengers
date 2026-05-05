@@ -1,0 +1,145 @@
+---
+description: Rules for writing LLM-as-judge evals and alignment datasets using the eval framework
+globs:
+  - tests/**/evals*.spec.ts
+  - tests/**/*eval*.spec.ts
+  - src/eval/**/*.ts
+  - scripts/examples/*.json
+alwaysApply: false
+---
+
+# Eval Framework — Cursor Agent Rules
+
+## How the eval system works
+
+The eval framework follows the Chrome AI Evals "basic judge model" pattern. It provides two eval types:
+
+1. **Rule-based** (deterministic) — `evalJsonFormat`, `evalDomain`, `evalPattern`, `evalMaxWords`, `evalNonEmpty`
+2. **LLM judge** (model-based) — `LlmJudge.evaluate()` returns binary PASS/FAIL with rationale
+
+Both types produce `EvalResult { label: EvalLabel, rationale: string }`.
+
+## Using judgePassFail() from any POM
+
+Every POM that extends `DriverPage` (browser, desktop, mobile) inherits `judgePassFail()`:
+
+```typescript
+// In your POM class:
+async judgeMyFeature(data: string): Promise<JudgeOutcome> {
+  return this.judgePassFail({
+    criteria: `PASS if the output contains valid data. FAIL if empty or malformed.`,
+    candidateOutput: data,
+    examples: [
+      { input: '{"valid": true}', result: { rationale: 'Valid data present.', label: EvalLabel.PASS } },
+      { input: '{}', result: { rationale: 'No meaningful data.', label: EvalLabel.FAIL } },
+    ],
+  });
+}
+```
+
+## Writing alignment datasets
+
+Alignment datasets are JSON arrays of `AlignmentEntry` objects. Save them under `scripts/examples/`:
+
+```json
+[
+  {
+    "id": "unique-id-001",
+    "input": { "context": "what was tested" },
+    "candidateOutput": "{\"key\": \"value\"}",
+    "humanLabel": "PASS",
+    "humanRationale": "Why a human would say PASS",
+    "criteria": "PASS if... FAIL if...",
+    "context": "Optional extra context",
+    "examples": [
+      { "input": "...", "result": { "rationale": "...", "label": "PASS" } },
+      { "input": "...", "result": { "rationale": "...", "label": "FAIL" } }
+    ]
+  }
+]
+```
+
+Best practices:
+- Include at least 6 entries (3 PASS, 3 FAIL)
+- Cover edge cases (empty strings, wrong domains, partial matches)
+- Keep few-shot examples consistent across entries
+- IDs should be descriptive: `feature-outcome-number` (e.g. `landing-pass-001`)
+
+## Running evals
+
+```typescript
+import { LlmJudge, EvalRunner } from '../../src/eval';
+import type { AlignmentEntry } from '../../src/eval';
+
+// Alignment test
+const judge = new LlmJudge();
+const runner = new EvalRunner(judge);
+const { metrics } = await runner.runAlignment(dataset);
+expect(metrics.alignmentScore!).toBeGreaterThanOrEqual(80);
+
+// Self-consistency test
+const { allConsistent } = await runner.runSelfConsistency(dataset.slice(0, 3), 3);
+expect(allConsistent).toBe(true);
+```
+
+## Rule-based vs LLM judge — when to use which
+
+| Use rule-based | Use LLM judge |
+|----------------|---------------|
+| Checking JSON structure | Evaluating semantic correctness |
+| Validating URL domains | Judging relevance or quality |
+| Enforcing word count limits | Comparing expected vs actual behavior |
+| Pattern matching (regex) | Rubric-based grading |
+| No API key needed, fast, free | Requires API key, has latency/cost |
+
+Prefer rule-based evals when possible — they're faster, cheaper, and deterministic. Use LLM judge when the check requires understanding or interpretation.
+
+## File conventions
+
+- **Eval test specs:** `tests/<platform>/evals.<platform>.spec.ts` (e.g. `evals.browser.spec.ts`)
+- **Alignment datasets:** `scripts/examples/<name>-dataset.json`
+- **Eval module source:** `src/eval/*.ts`
+- **POM eval methods:** Add to the POM class that owns the feature being evaluated
+
+## LLM provider configuration
+
+The eval system auto-detects which LLM to use from env vars. Set at least one:
+
+```bash
+OPENAI_API_KEY=sk-...          # → OpenAI (gpt-4o-mini)
+ANTHROPIC_API_KEY=sk-ant-...   # → Anthropic (claude-sonnet-4-20250514)
+GEMINI_API_KEY=AIza...         # → Gemini (gemini-2.0-flash)
+```
+
+Override provider or model explicitly:
+```bash
+LLM_PROVIDER=anthropic
+LLM_MODEL=claude-opus-4-20250514
+```
+
+## Key imports
+
+```typescript
+// Types
+import { EvalLabel, type EvalResult, type JudgeRequest, type AlignmentEntry } from '../../src/eval';
+
+// Judge & runner
+import { LlmJudge, EvalRunner } from '../../src/eval';
+
+// Rule-based evaluators
+import { evalDomain, evalNonEmpty, evalJsonFormat, composeRuleEvals } from '../../src/eval';
+
+// Provider (advanced)
+import { resolveProvider, type LlmProvider } from '../../src/eval';
+```
+
+## Always guard LLM tests with skip
+
+```typescript
+test.skip(
+  !process.env.OPENAI_API_KEY && !process.env.ANTHROPIC_API_KEY && !process.env.GEMINI_API_KEY,
+  'No LLM API key configured',
+);
+```
+
+This ensures CI/CD and local runs without API keys don't fail on LLM-dependent tests.

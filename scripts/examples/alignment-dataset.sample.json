@@ -1,0 +1,116 @@
+[
+  {
+    "id": "landing-pass-001",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://www.netflix.com/in\",\"title\":\"Netflix India - Watch TV Shows Online\"}",
+    "humanLabel": "PASS",
+    "humanRationale": "URL belongs to netflix.com and title is non-empty and brand-relevant.",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  },
+  {
+    "id": "landing-pass-002",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix - Watch TV Shows Online, Watch Movies Online\"}",
+    "humanLabel": "PASS",
+    "humanRationale": "URL is netflix.com root. Title is descriptive and brand-relevant.",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  },
+  {
+    "id": "landing-fail-001",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://example.com\",\"title\":\"\"}",
+    "humanLabel": "FAIL",
+    "humanRationale": "URL is not netflix.com and title is empty.",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  },
+  {
+    "id": "landing-fail-002",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://www.netflix.com/browse\",\"title\":\"\"}",
+    "humanLabel": "FAIL",
+    "humanRationale": "URL is correct but title is empty — page did not load properly.",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  },
+  {
+    "id": "landing-fail-003",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+    "humanLabel": "FAIL",
+    "humanRationale": "URL is google.com, not the expected netflix.com domain.",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  },
+  {
+    "id": "landing-pass-003",
+    "input": { "site": "netflix.com" },
+    "candidateOutput": "{\"url\":\"https://www.netflix.com/title/81511779\",\"title\":\"Stranger Things | Netflix Official Site\"}",
+    "humanLabel": "PASS",
+    "humanRationale": "URL is netflix.com and title is relevant (a Netflix show page).",
+    "criteria": "You are evaluating whether a browser landing page loaded correctly.\n\nPASS if BOTH conditions are met:\n  1. The URL hostname contains the expected domain (netflix.com). Subpaths, country variants (/in, /browse, /title/...) are fine.\n  2. The page title is non-empty and reasonably related to the site.\n\nFAIL if ANY condition is violated:\n  - URL hostname does not contain the expected domain.\n  - Title is empty or completely unrelated to the site.",
+    "context": "Browser smoke validation — landing page quality check. We are verifying the page loaded on the correct domain with a valid title.",
+    "examples": [
+      {
+        "input": "{\"url\":\"https://www.netflix.com\",\"title\":\"Netflix\"}",
+        "result": { "rationale": "URL is on netflix.com and title says Netflix — both conditions met.", "label": "PASS" }
+      },
+      {
+        "input": "{\"url\":\"https://www.google.com\",\"title\":\"Google\"}",
+        "result": { "rationale": "URL is google.com, not the expected netflix.com domain.", "label": "FAIL" }
+      }
+    ]
+  }
+]
