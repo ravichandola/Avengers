@@ -12,4 +12,7 @@ coverage/
 *.log
 .auth/
 .checkpoints/
+# Playwright output (HTML report, merge reports, traces under test-results)
 test-results/
+playwright-report/
+blob-report/

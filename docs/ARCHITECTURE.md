@@ -264,7 +264,7 @@ Load order:
 |---------|------|
 | `npm run build` | TypeScript compile to `dist/` |
 | `npm test` | All Playwright projects that match files |
-| `npm run pom:gen` | `scripts/generate-pom.ts` — scaffold POM from live app scan |
+| `npm run pom:gen` | `scripts/generate-pom.ts` — scaffold POM (browser DOM, desktop AX/XML/API) |
 | MCP `desktop-bridge` | Separate automation surface using same `VisionProvider` / scanning (see `mcp/desktop-bridge.ts`) |
 
 ---
@@ -273,7 +273,7 @@ Load order:
 
 | Goal | Where to change |
 |------|------------------|
-| New **browser** flow | POM extends **`DriverPage`**; test `*.browser.spec.ts`; use `app` + optional `pages` |
+| New **browser** flow | Prefer **`app`** + POM **`extends DriverPage`**; for Playwright **`Locator`** POMs use **`extends PageObject`** with **`pages.current()`**; optional **`network`** fixture for HTTP capture |
 | New **desktop** flow | POM extends **`DesktopPage`**; test `*.desktop.spec.ts`; tag `@app=...` |
 | New **API** contract | `*.api.spec.ts`; use **`api`** fixture or `app` as `APIDriver` per project |
 | Reusable **LLM assertion** | Add **`protected`** helper on **`DriverPage`** or thin **`LlmJudge`** module imported by `DriverPage` |
@@ -327,6 +327,11 @@ Use this section when copying ideas into **JUnit + Appium**, **Pytest + Playwrig
 | `src/core/driver-factory.ts` | Creates driver + optional vision wrapper |
 | `src/fixtures/index.ts` | Playwright fixtures |
 | `src/drivers/browser/browser-driver.ts` | Playwright-backed `IDriver` |
+| `src/drivers/browser/pom/dom-scanner.ts` | In-page DOM scan for POM generation |
+| `src/drivers/browser/pom/selector-strategy.ts` | Ranked selector heuristics for generated locators |
+| `src/drivers/browser/pom/pom-generator.ts` | Optional `PageObject` / region-grouped codegen |
+| `src/drivers/browser/network/network-monitor.ts` | Attach to `Page`; collect requests/responses |
+| `src/drivers/browser/network/network-reporter.ts` | Playwright reporter: console network summary |
 | `src/drivers/desktop/desktop-driver.ts` | Desktop `IDriver` façade |
 | `src/drivers/desktop/macos-adapter.ts` | macOS implementation details |
 | `src/drivers/desktop/windows-adapter.ts` | Windows implementation details |

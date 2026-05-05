@@ -153,11 +153,11 @@ projects: [
 src/
   core/               # Types, IDriver interface, DriverFactory, config
   drivers/
-    browser/          # BrowserDriver + PageManager (multi-tab)
+    browser/          # BrowserDriver, PageManager, POM helpers, network monitor
     desktop/          # DesktopDriver + macOS/Windows adapters
     mobile/           # MobileDriver (Appium/WDIO)
     api/              # APIDriver (REST + GraphQL)
-  fixtures/           # Playwright test.extend() with app, pages, api
+  fixtures/           # Playwright test.extend(): app, pages, api, network, ...
   utils/              # Logger, retry, sleep
 
 tests/
@@ -165,7 +165,14 @@ tests/
   desktop/            # *.desktop.spec.ts
   mobile/             # *.mobile.spec.ts
   api/                # *.api.spec.ts
+  pom/                # Page objects per platform (often generated)
+
+docs/
+  pom-generator.md    # CLI: browser / desktop / mobile / API POM scaffolding
+  browser-automation.md  # Browser tests, PageObject pattern, network fixture
 ```
+
+For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/pom-generator.md`**. For **HTTP traces** on browser tests, see **`docs/browser-automation.md`** (network fixture + reporter).
 
 ## Requirements
 

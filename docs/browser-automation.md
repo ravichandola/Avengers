@@ -99,6 +99,49 @@ test('two tabs', async ({ pages }) => {
 
 **Note:** `pages` is optimized for **multi-tab** demos. For most flows, prefer driving everything through **`app`** and one tab unless you explicitly need parallel tabs.
 
+### PageObject-based POMs (Playwright locators)
+
+When you want **native Playwright `Locator`** fields instead of `IDriver` + `element()`, extend **`PageObject`** and pass the current tab from **`pages`**:
+
+```typescript
+import { test, expect } from '../../src/fixtures';
+import { NetflixBrowsePage } from '../pom/browser/netflix-browse-page';
+
+test('browse with PageObject', async ({ pages }) => {
+  const netflix = new NetflixBrowsePage(pages.current());
+  await netflix.open();
+  expect(await netflix.getCurrentURL()).toContain('netflix.com');
+});
+```
+
+Use **`pages.create(MyPageObject)`** if you prefer the factory on `PageManager`. Generated browser POMs are documented in [pom-generator.md](./pom-generator.md) (`DriverPage` vs `PageObject`).
+
+## Network capture (`network` fixture)
+
+Browser projects expose a **`network`** fixture backed by **`NetworkMonitor`** (`src/drivers/browser/network/`). It records requests and responses on a Playwright **`Page`**, redacts sensitive headers, caps memory, and can attach artifacts to the HTML report.
+
+1. Call **`network.start(page)`** as early as possible (before navigation you care about).
+2. Assertions can use **`network.getRequestCount()`**, **`getEntriesByPattern(/regex/)`**, **`getFailedRequests()`**, **`getSummary(...)`**.
+3. **Attachments:** If the test **fails** or the title includes **`@network`**, the fixture attaches **`network-log`** (JSON) and **`network-summary`** (plain text). Optionally attach again from the test with **`test.info().attach(...)`**.
+
+```typescript
+test('checkout flow @network', async ({ pages, network }) => {
+  const page = pages.current();
+  network.start(page);
+  await page.goto('https://example.com');
+  const apis = network.getEntriesByPattern(/\/api\//);
+  expect(apis.length).toBeGreaterThan(0);
+});
+```
+
+**Reporter:** `playwright.config.ts` registers **`./src/drivers/browser/network/network-reporter.ts`**, which prints a concise network summary to the console when those attachments are present.
+
+This uses Playwright’s request/response events (in-process). It does not require a separate Chrome DevTools MCP.
+
+## Generating browser POMs from a URL
+
+See **[pom-generator.md](./pom-generator.md)** for `scripts/generate-pom.ts` (default `DriverPage` output, optional `--enhanced` + `PageObject`).
+
 ## Authentication without logging in every time
 
 Use **`AuthManager`** with **`setupProfile`** once, then **`app.launch({ authProfile: 'myuser' })`**. Full steps and examples: [advanced-auth-and-checkpoints.md](./advanced-auth-and-checkpoints.md).

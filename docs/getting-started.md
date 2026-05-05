@@ -119,6 +119,8 @@ Run it:
 npx playwright test --project=chrome tests/browser/my-first.browser.spec.ts
 ```
 
+**Optional:** scaffold a browser POM from a URL using [pom-generator.md](./pom-generator.md). For HTTP tracing on a tab, use the **`network`** fixture in [browser-automation.md](./browser-automation.md).
+
 ## Write your first eval test
 
 Evals don't need a browser — they test LLM judge quality. Create `tests/browser/my-eval.browser.spec.ts`:
