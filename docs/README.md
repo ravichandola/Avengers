@@ -49,14 +49,14 @@ Use this if you want a single linear path through all docs.
 
 | Guide | What you'll learn |
 |--------|-------------------|
-| [**POM generator**](./pom-generator.md) | Auto-generate Page Object Models from live scans (browser, desktop, mobile, API) |
+| [**POM generator**](./pom-generator.md) | Scaffold POMs: browser DOM (`DOMScanner` / `--enhanced`), desktop AX, mobile XML, API JSON |
 | [**Desktop bridge MCP**](./desktop-bridge-mcp.md) | MCP server for Cursor — scan apps, read AX trees, generate POMs from chat |
 
 ### Platform guides
 
 | Guide | What you'll learn |
 |--------|-------------------|
-| [**Browser automation**](./browser-automation.md) | Chrome / Firefox / WebKit, auth profiles, multi-tab, selectors |
+| [**Browser automation**](./browser-automation.md) | Chrome / Firefox / WebKit, auth profiles, multi-tab, selectors, **`network`** fixture, `PageObject` pattern |
 | [**Desktop — macOS**](./desktop-macos.md) | Native apps, Accessibility, Apple TV–style flows |
 | [**Desktop — Windows**](./desktop-windows.md) | UIA / PowerShell bridge, running tests on Windows |
 | [**Mobile — iOS**](./mobile-ios.md) | Appium, XCUITest, bundle IDs, simulators |
@@ -102,7 +102,7 @@ Put files under `tests/` (see `playwright.config.ts` → `testDir`).
 ## Need help?
 
 - Configuration lives in **`playwright.config.ts`** (projects, timeouts, metadata).
-- Shared test API: **`src/fixtures/index.ts`** (`app`, `pages`, `api`, `auth`, `checkpoint`).
+- Shared test API: **`src/fixtures/index.ts`** (`app`, `pages`, `api`, `auth`, `checkpoint`, **`network`** on browser projects).
 - Unified driver contract: **`src/core/base-driver.ts`** (`IDriver`).
 - LLM provider setup: set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` in `.env`.
 - Cursor rules: `.cursor/rules/desktop-automation.mdc` and `.cursor/rules/eval-framework.mdc`.

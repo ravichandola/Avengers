@@ -13,7 +13,11 @@ export default defineConfig({
   testDir: './tests',
   timeout: env.timeout,
   retries: env.retries,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  reporter: [
+    ['list'],
+    ['html', { open: 'never' }],
+    ['./src/drivers/browser/network/network-reporter.ts'],
+  ],
   fullyParallel: true,
 
   projects: [

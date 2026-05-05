@@ -10,6 +10,7 @@ import { CheckpointManager } from '../session/checkpoint-manager';
 import { runSteps, Step } from '../session/resumable-steps';
 import { resolveConfig } from '../core/config';
 import { logger } from '../utils/logger';
+import { NetworkMonitor } from '../drivers/browser/network/network-monitor';
 
 export interface TestFixtures {
   app: IDriver;
@@ -17,6 +18,7 @@ export interface TestFixtures {
   api: APIDriver;
   auth: typeof AuthManager;
   checkpoint: CheckpointManager;
+  network: NetworkMonitor;
 }
 
 const BROWSER_PLATFORMS = ['chromium', 'firefox', 'webkit'];
@@ -149,6 +151,42 @@ export const test = base.extend<TestFixtures>({
     const manager = new CheckpointManager(testInfo.testId);
     await use(manager);
   },
+
+  network: async ({}, use, testInfo) => {
+    const metadata = (testInfo.project as any).metadata ?? {};
+    const platform: Platform = metadata.platform ?? 'chromium';
+
+    if (!BROWSER_PLATFORMS.includes(platform)) {
+      await use(null as any);
+      return;
+    }
+
+    const monitor = new NetworkMonitor();
+    await use(monitor);
+
+    const hasNetworkTag = testInfo.title.includes('@network')
+      || testInfo.tags?.some?.((t: string) => t === '@network');
+    const shouldAttach = testInfo.status !== 'passed' || hasNetworkTag;
+
+    if (shouldAttach && monitor.hasEntries()) {
+      const summary = monitor.getSummary(
+        testInfo.testId,
+        testInfo.title,
+        testInfo.status ?? 'unknown',
+      );
+      await testInfo.attach('network-log', {
+        body: JSON.stringify(summary, null, 2),
+        contentType: 'application/json',
+      });
+      await testInfo.attach('network-summary', {
+        body: monitor.toHumanReadable(),
+        contentType: 'text/plain',
+      });
+    }
+
+    monitor.stop();
+    monitor.clear();
+  },
 });
 
-export { expect, runSteps, Step };
+export { expect, runSteps, Step, NetworkMonitor };

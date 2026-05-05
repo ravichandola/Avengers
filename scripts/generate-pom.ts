@@ -3,6 +3,9 @@ import * as path from 'path';
 import { chromium } from 'playwright';
 import { MacOSAdapter } from '../src/drivers/desktop/macos-adapter';
 import { WindowsAdapter } from '../src/drivers/desktop/windows-adapter';
+import { DOMScanner } from '../src/drivers/browser/pom/dom-scanner';
+import { SelectorStrategy } from '../src/drivers/browser/pom/selector-strategy';
+import { POMGenerator } from '../src/drivers/browser/pom/pom-generator';
 
 const root = path.resolve(__dirname, '..');
 
@@ -88,109 +91,30 @@ function escapeSelectorForTs(s: string): string {
   return JSON.stringify(s);
 }
 
-/** Playwright resolveSelector: use [ # . // xpath= or strings containing : or >> */
-function bestBrowserSelector(
-  meta: {
-    tag: string;
-    testId?: string;
-    id?: string;
-    name?: string;
-    type?: string;
-    aria?: string;
-    placeholder?: string;
-    text?: string;
-    href?: string;
-  },
-  index: number,
-): string {
-  const t = meta.tag.toLowerCase();
-  if (meta.testId) return `[data-testid=${JSON.stringify(meta.testId)}]`;
-  if (meta.id && /^[a-zA-Z_][\w-]*$/.test(meta.id)) {
-    return `#${meta.id}`;
-  }
-  if (meta.id) return `[id=${JSON.stringify(meta.id)}]`;
-  if (meta.name) return `[name=${JSON.stringify(meta.name)}]`;
-  if (meta.aria) return `[aria-label=${JSON.stringify(meta.aria)}]`;
-  if (meta.placeholder) return `[placeholder=${JSON.stringify(meta.placeholder)}]`;
-  const text = (meta.text || '').trim().slice(0, 60);
-  if (text && text.length <= 50) {
-    const esc = text.replace(/"/g, '\\"');
-    if (t === 'a' && meta.href) return `a[href=${JSON.stringify(meta.href)}]`;
-    if (t === 'a') return `a:has-text("${esc}")`;
-    if (t === 'button' || meta.tag === 'BUTTON') return `button:has-text("${esc}")`;
-    if (t === 'input' || t === 'textarea' || t === 'select') {
-      const ph = (meta.placeholder || text).slice(0, 60);
-      if (ph) {
-        const safe = ph.replace(/'/g, "''");
-        return `xpath=//${t}[contains(@placeholder, '${safe}')]`;
-      }
-      return `xpath=(//${t})[${index + 1}]`;
-    }
-  }
-  if (t === 'input' && meta.type) return `input[type=${JSON.stringify(meta.type)}]`;
-  return `xpath=(//${t})[${index + 1}]`;
-}
-
 async function scanBrowser(url: string, maxEl: number): Promise<{ entryUrl: string; elements: BrowserElement[] }> {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-    const raw = await page.evaluate(() => {
-      type M = {
-        tag: string;
-        testId?: string;
-        id?: string;
-        name?: string;
-        type?: string;
-        aria?: string;
-        placeholder?: string;
-        text?: string;
-        href?: string;
-      };
-      const out: M[] = [];
-      const nodes = document.querySelectorAll(
-        'a[href], button, [role="button"], [role="link"], input:not([type="hidden"]), select, textarea, [data-testid]',
-      );
-      nodes.forEach((node) => {
-        if (!(node instanceof HTMLElement)) return;
-        const rect = node.getBoundingClientRect();
-        if (rect.width < 2 || rect.height < 2) return;
-        const st = window.getComputedStyle(node);
-        if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0') return;
-        const tag = node.tagName;
-        let text = '';
-        if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) {
-          text = node.placeholder || node.value || '';
-        } else if (node instanceof HTMLSelectElement) {
-          text = node.value || '';
-        } else {
-          text = (node.innerText || node.textContent || '').trim().slice(0, 120);
-        }
-        const te = node.getAttribute('data-testid') || '';
-        const id = node.getAttribute('id') || '';
-        out.push({
-          tag,
-          testId: te || undefined,
-          id: id || undefined,
-          name: node.getAttribute('name') || undefined,
-          type: node.getAttribute('type') || undefined,
-          aria: node.getAttribute('aria-label') || undefined,
-          placeholder: node.getAttribute('placeholder') || undefined,
-          text: text || undefined,
-          href: node instanceof HTMLAnchorElement ? node.getAttribute('href') || undefined : undefined,
-        });
-      });
-      return out;
-    });
+
+    const scanner = new DOMScanner({ maxElements: maxEl });
+    const scanResult = await scanner.scan(page);
+
+    const strategy = new SelectorStrategy();
     const used = new Set<string>();
     const elements: BrowserElement[] = [];
-    raw.slice(0, maxEl).forEach((m, i) => {
-      const sel = bestBrowserSelector(m, i);
-      const label = m.testId || m.id || m.name || m.aria || m.placeholder || m.text || m.tag;
+
+    scanResult.elements.forEach((el, i) => {
+      const ranked = strategy.rank(el, i);
+      const label = el.testId || el.id || el.name || el.ariaLabel || el.placeholder || el.text || el.tag;
       const prop = toCamelProps(String(label), used);
-      elements.push({ prop, selector: sel, hint: [m.tag, m.text].filter(Boolean).join(' ') });
+      elements.push({
+        prop,
+        selector: ranked.selector,
+        hint: [el.tag, el.text?.slice(0, 40)].filter(Boolean).join(' '),
+      });
     });
+
     return { entryUrl: url, elements };
   } finally {
     await browser.close();
@@ -448,6 +372,8 @@ browser:
   --static-prop <name>     Name for static URL property (default: entryUrl)
   --max-elements <n>       Cap fields (default: 80)
   --update-index           Append export to tests/pom/index.ts
+  --enhanced               Use enhanced DOM scanner with shadow DOM, region grouping, smart selectors
+  --base-class <name>      PageObject (Locator-based) or DriverPage (default: DriverPage)
 
 mobile:
   --source <page.xml>      (required) Raw XML from iOS/Android
@@ -492,9 +418,35 @@ async function main(): Promise<void> {
     const className = (flags['class-name'] as string) || urlToClassName(url, 'Page');
     const maxEl = Math.min(500, Math.max(1, parseInt(String(flags['max-elements'] || '80'), 10) || 80));
     const staticProp = (flags['static-prop'] as string) || 'entryUrl';
+    const baseClass = (flags['base-class'] as string) === 'PageObject' ? 'PageObject' as const : 'DriverPage' as const;
     const fileBase = `${kebabFromClass(className)}.ts`;
     const out =
       (flags.out as string) || path.join(root, 'tests', 'pom', 'browser', fileBase);
+
+    if (flags['enhanced']) {
+      console.log(`Scanning ${url} (enhanced scanner) ...`);
+      const browser = await (await import('playwright')).chromium.launch({ headless: true });
+      try {
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
+        const scanner = new DOMScanner({ maxElements: maxEl });
+        const scanResult = await scanner.scan(page);
+        const generator = new POMGenerator();
+        const { fields } = generator.generateAndWrite(scanResult, {
+          className,
+          outputPath: out,
+          baseClass,
+          staticUrlProp: staticProp,
+          updateBarrel: updateIndex,
+          generateHelpers: true,
+        });
+        console.log(`Wrote ${path.relative(root, out)} (${fields.length} elements, ${Object.keys(scanResult.regions).length} regions)`);
+      } finally {
+        await browser.close();
+      }
+      return;
+    }
+
     console.log(`Scanning ${url} ...`);
     const { entryUrl, elements } = await scanBrowser(url, maxEl);
     generateBrowserPom(className, entryUrl, elements, out, staticProp);
