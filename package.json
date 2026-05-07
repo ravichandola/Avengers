@@ -9,6 +9,7 @@
     "dev": "ts-node src/index.ts",
     "test": "npx playwright test",
     "test:chrome": "npx playwright test --project=chrome",
+    "test:chrome:resume": "BROWSER_CHECKPOINT_RESUME=true npx playwright test --project=chrome",
     "test:firefox": "npx playwright test --project=firefox",
     "test:webkit": "npx playwright test --project=webkit",
     "test:desktop": "npx playwright test --project=desktop-macos",

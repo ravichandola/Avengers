@@ -65,7 +65,6 @@ export interface LaunchOptions {
   appActivity?: string;
   authProfile?: string;
   storageStatePath?: string;
-
   windowState?: WindowState;
 }
 

@@ -6,6 +6,7 @@ import { PageManager } from './page-manager';
 import { PageObject } from './pom/page-object';
 import { AuthManager } from '../../auth/auth-manager';
 import { logger } from '../../utils/logger';
+import { newContextFromStorageFile } from '../../session/copyable/playwright-resume';
 import { resolveSelector } from './resolve-selector';
 
 export class BrowserDriver implements IDriver {
@@ -90,6 +91,28 @@ export class BrowserDriver implements IDriver {
     }
 
     logger.info('BrowserDriver', `Launched ${this.platform}${target.url ? ` → ${target.url}` : ''}${storageState ? ' (authenticated)' : ''}`);
+  }
+
+  /**
+   * Drop the current context and open a new one from Playwright storageState.
+   * Same Browser instance is kept (fixture-supplied or launched). Used when
+   * resuming a checkpointed `runSteps` flow.
+   */
+  async recreateContextFromStorageState(storageStatePath: string): Promise<void> {
+    const browser = this.externalBrowser ?? this.ownedBrowser;
+    if (!browser) throw new Error('BrowserDriver: no browser — call launch() first');
+
+    const viewport = this.config.browser?.viewport ?? { width: 1280, height: 720 };
+    this.context = await newContextFromStorageFile({
+      browser,
+      storagePath: storageStatePath,
+      viewport,
+      closePrevious: this.context,
+    });
+    this._pageManager = null;
+    await this.context.newPage();
+    this._pageManager = new PageManager(this.context);
+    logger.info('BrowserDriver', `Context recreated from storage state: ${storageStatePath}`);
   }
 
   async close(): Promise<void> {

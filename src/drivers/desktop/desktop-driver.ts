@@ -122,25 +122,10 @@ export class DesktopDriver implements IDriver, AsyncDisposable {
     await this.adapter.focusForVision(settleMs);
   }
 
-  /**
-   * Capture a screenshot of ONLY the connected app's primary window
-   * (PID-scoped). On macOS this uses `screencapture -R` after focus; on
-   * Windows it uses `PrintWindow(hWnd, PW_RENDERFULLCONTENT)` so the result
-   * contains the target window even if covered by another app.
-   *
-   * Use this for vision pipelines — it eliminates ambient noise (dock,
-   * status bar, other apps) that would otherwise mislead the model.
-   */
   async screenshotWindow(): Promise<Buffer> {
     return this.adapter.screenshotWindow();
   }
 
-  /**
-   * Read the connected app's primary window bounds in logical screen
-   * coordinates plus the pixel-to-logical scale of any screenshot captured
-   * for that window. Vision callers use this to translate image-space
-   * coordinates returned by the model back into clickable screen coords.
-   */
   async getWindowBounds(): Promise<WindowBounds | null> {
     return this.adapter.getWindowBounds();
   }

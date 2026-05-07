@@ -79,6 +79,15 @@ export const env = {
   get browserViewportH(): number { return num('BROWSER_VIEWPORT_HEIGHT', 720); },
   get browserSlowMo():   number  { return num('BROWSER_SLOW_MO', 0); },
 
+  /**
+   * When true, `runSteps` resumes from `.checkpoints/` after a failed run
+   * (restores cookies/localStorage + URL, skips completed steps).
+   * Default false so CI and normal runs always start fresh unless you opt in.
+   */
+  get browserCheckpointResume(): boolean {
+    return bool('BROWSER_CHECKPOINT_RESUME', false);
+  },
+
   // ─── API ─────────────────────────────────────────────────────
   get apiBaseURL():   string           { return str('API_BASE_URL', env.baseURL); },
   get apiTimeout():   number           { return num('API_TIMEOUT', 30_000); },

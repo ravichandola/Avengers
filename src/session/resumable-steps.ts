@@ -1,7 +1,18 @@
-import { BrowserContext } from 'playwright';
+import type { BrowserContext } from 'playwright';
 import { IDriver } from '../core/base-driver';
-import { CheckpointManager } from './checkpoint-manager';
+import { BrowserDriver } from '../drivers/browser/browser-driver';
+import { env } from '../core/env-loader';
 import { logger } from '../utils/logger';
+import { VisionDriverWrapper } from '../vision/vision-driver-mixin';
+import { runResumableSteps as runResumableStepsPortable } from './copyable/run-resumable-steps';
+
+function unwrapToBrowserDriver(d: IDriver): BrowserDriver | null {
+  let cur: IDriver = d;
+  while (cur instanceof VisionDriverWrapper) {
+    cur = (cur as unknown as { inner: IDriver }).inner;
+  }
+  return cur instanceof BrowserDriver ? cur : null;
+}
 
 export interface Step {
   name: string;
@@ -16,39 +27,37 @@ interface RunStepsOptions {
 }
 
 /**
- * Execute a sequence of steps with auto-checkpointing.
- * If a prior run failed at step N, this resumes from step N
- * by restoring the saved browser state and skipping completed steps.
+ * Execute a sequence of steps with auto-checkpointing (wraps portable {@link runResumableStepsPortable}).
+ * After each successful step, cookies/localStorage + URL are saved under `.checkpoints/`.
+ * Set env `BROWSER_CHECKPOINT_RESUME=true` to restore and skip completed steps.
  */
 export async function runSteps(options: RunStepsOptions): Promise<void> {
   const { testId, driver, steps, getContext } = options;
-  const checkpoint = new CheckpointManager(testId);
-  const saved = await checkpoint.hasCheckpoint();
-  const startFrom = saved ? saved.step + 1 : 0;
 
-  if (saved) {
-    logger.info('ResumableSteps', `Resuming "${testId}" from step ${startFrom} (${steps[startFrom]?.name ?? 'end'})`);
-    await driver.navigate(saved.url);
-  }
-
-  for (let i = startFrom; i < steps.length; i++) {
-    const step = steps[i];
-    logger.info('ResumableSteps', `Running step ${i}: "${step.name}"`);
-
-    try {
-      await step.fn(driver);
-    } catch (err) {
-      logger.error('ResumableSteps', `Step ${i} "${step.name}" failed: ${err}`);
-      throw err;
-    }
-
-    const ctx = getContext();
-    if (ctx) {
-      const url = await driver.getURL();
-      await checkpoint.checkpoint(i, ctx, url);
-    }
-  }
-
-  await checkpoint.clear();
-  logger.info('ResumableSteps', `All ${steps.length} steps completed for "${testId}"`);
+  await runResumableStepsPortable({
+    testId,
+    resumeEnabled: env.browserCheckpointResume,
+    driver,
+    steps,
+    getContext,
+    getUrl: (d) => d.getURL(),
+    navigate: (d, url) => d.navigate(url),
+    onResume: async (d, cp) => {
+      const bd = unwrapToBrowserDriver(d);
+      if (bd) {
+        await bd.recreateContextFromStorageState(cp.statePath);
+      } else {
+        logger.warn(
+          'ResumableSteps',
+          'Cannot load storage state ― driver is not BrowserDriver; navigating only',
+        );
+      }
+      await d.navigate(cp.url);
+    },
+    log: (level, msg) => {
+      if (level === 'info') logger.info('ResumableSteps', msg);
+      else if (level === 'warn') logger.warn('ResumableSteps', msg);
+      else logger.error('ResumableSteps', msg);
+    },
+  });
 }

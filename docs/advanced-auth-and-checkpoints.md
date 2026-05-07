@@ -62,11 +62,43 @@ await AuthManager.setupProfile('admin', async (driver) => {
 
 (`browser` comes from Playwright’s **`{ browser }`** fixture in a test that has browser context.)
 
+## Drop-in copy (`src/session/copyable/`)
+
+To reuse checkpoints **outside** this repo, copy the folder **`src/session/copyable/`** (TypeScript sources + `COPY_AND_INTEGRATE.md`). It only needs Playwright + Node. Same logic powers `runSteps` here via a thin wrapper.
+
+Imports from this package:
+
+```typescript
+import {
+  runResumableSteps,
+  resumeEnabledFromEnv,
+  newContextFromStorageFile,
+  PortableCheckpointManager,
+} from '../../src/session';
+```
+
+Or copy the folder and import from `./copyable` in your project.
+
 ## Resume-from-failure (`runSteps` + `CheckpointManager`)
 
 ### Idea
 
-For long UI flows, **`runSteps`** runs numbered steps and **checkpoints** browser **storage state + URL** after each successful step. If step **3** fails, the next run **restores** state after step **2** and **continues from step 3**.
+For long UI flows, **`runSteps`** runs numbered steps and **checkpoints** browser **storage state + URL** after each successful step. If step **3** fails, a checkpoint exists after step **2**. When you **opt in** to resume, the next run **reloads** that storage state, **opens the saved URL**, and **continues from step 3** (skipping steps 0–2).
+
+### Resume opt-in (`BROWSER_CHECKPOINT_RESUME`)
+
+Playwright has no built-in `--history` flag. Use an environment variable (or npm script):
+
+```bash
+# Retry after fixing the failure — skip steps that already passed
+BROWSER_CHECKPOINT_RESUME=true npx playwright test resumable-checkout --project=chrome
+```
+
+```bash
+npm run test:chrome:resume -- resumable-checkout
+```
+
+If **`BROWSER_CHECKPOINT_RESUME` is not `true`**, each run starts from **step 0** with a normal browser context. Checkpoints are still **written** after each successful step so the next **resume** run has fresh data.
 
 ### Files
 
