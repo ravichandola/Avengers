@@ -143,5 +143,5 @@ If **`OPENAI_API_KEY`** is set and vision is enabled, failed UI actions may use 
 
 ## Related
 
-- [browser-automation.md](./browser-automation.md)  
-- [getting-started.md](./getting-started.md)  
+- [Browser automation](../browser/automation.md)  
+- [First test & setup](../configuration/first-test-and-setup.md)  

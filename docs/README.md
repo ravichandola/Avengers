@@ -1,73 +1,101 @@
 # Desktop Agent — Documentation
 
-Welcome. This framework gives you **one Playwright-style API** across browser, desktop (macOS / Windows), mobile (iOS / Android), and HTTP APIs. You write tests in TypeScript, pick a **project** in Playwright that matches your platform, and use shared **fixtures** (`app`, `api`, `auth`, …).
+Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **browser**, **desktop (macOS / Windows)**, **mobile (iOS / Android)**, and **HTTP APIs**. You pick a **Playwright project** that matches your target, import **`test` from `src/fixtures`**, and use the same patterns everywhere.
+
+**New here?** Start with [Configuration: first test & setup](./configuration/first-test-and-setup.md), then skim [Common: fixtures & shared API](./common/fixtures-and-idriver.md).
 
 ---
 
-## Master index
+## 1. Configuration (install, env, run your first test)
 
-## Top-to-bottom reading order
-
-Use this if you want a single linear path through all docs.
-
-1. [**Getting started**](./getting-started.md)
-2. [**Architecture & porting**](./ARCHITECTURE.md)
-3. [**Browser automation**](./browser-automation.md)
-4. [**Desktop - macOS**](./desktop-macos.md)
-5. [**Desktop - Windows**](./desktop-windows.md)
-6. [**Mobile - iOS**](./mobile-ios.md)
-7. [**Mobile - Android**](./mobile-android.md)
-8. [**API testing**](./api-testing.md)
-9. [**Auth & checkpoints**](./advanced-auth-and-checkpoints.md)
-10. [**POM generator**](./pom-generator.md)
-11. [**Desktop bridge MCP**](./desktop-bridge-mcp.md)
-12. [**Eval framework**](./eval-framework.md)
-13. [**LLM providers**](./llm-providers.md)
+| Guide | What you will learn |
+|--------|---------------------|
+| [**First test & setup**](./configuration/first-test-and-setup.md) | Install, prerequisites, how runs are routed, first browser test, naming rules |
+| [**Environment variables**](./configuration/environment.md) | `.env` layers, shells vs files, per-platform keys, quick reference |
 
 ---
 
-### Getting started
+## 2. Common (shared features — all platforms)
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**Getting started**](./getting-started.md) | Install, env vars, project layout, first test, first eval |
+| Guide | What you will learn |
+|--------|---------------------|
+| [**Fixtures & `IDriver`**](./common/fixtures-and-idriver.md) | `DriverFactory`, vision vs API drivers, fixture matrix, POM bases (`DriverPage`, `ElementRef`), links to each stack |
+| [**Auth & checkpoints**](./common/auth-and-checkpoints.md) | Saved login profiles (`.auth/`), resume checkpoints (`.checkpoints/`), `resumable` fixture, copyable portable module |
+| [**Eval framework**](./common/eval-framework.md) | Rule-based and LLM-as-judge evals, alignment, self-consistency |
+| [**LLM providers**](./common/llm-providers.md) | OpenAI, Anthropic, Gemini — env vars and switching models |
+| [**POM generator**](./common/pom-generator.md) | Scaffold page objects from DOM, AX, mobile XML, or API schemas |
 
-### Architecture & design
+---
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**Architecture & porting**](./ARCHITECTURE.md) | Top-to-bottom layers, call chains, LLM vs vision, source file map, how to port |
+## 3. Architecture
 
-### Eval framework & LLM providers
+| Guide | What you will learn |
+|--------|---------------------|
+| [**Architecture hub**](./architecture/README.md) | How this section is organized |
+| [**Full system architecture**](./architecture/overview.md) | Layers, execution flow, `IDriver`, factory, POM, LLM vs vision, config, porting, source map, glossary |
+| [**Browser (architecture)**](./architecture/browser.md) | How Playwright fits in — context, `BrowserDriver`, optional network & checkpoints |
+| [**Desktop (architecture)**](./architecture/desktop.md) | `DesktopDriver`, macOS vs Windows adapters |
+| [**Mobile (architecture)**](./architecture/mobile.md) | Appium + WebdriverIO path |
+| [**API (architecture)**](./architecture/api.md) | `APIDriver`, no vision wrapper |
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**Eval framework**](./eval-framework.md) | LLM-as-judge, rule-based evals, alignment testing, bootstrap, self-consistency, how to write new evals |
-| [**LLM providers**](./llm-providers.md) | OpenAI / Anthropic / Gemini provider layer, auto-detection, env vars, how to add a provider |
+---
 
-### Tooling
+## 4. Browser (guides)
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**POM generator**](./pom-generator.md) | Scaffold POMs: browser DOM (`DOMScanner` / `--enhanced`), desktop AX, mobile XML, API JSON |
-| [**Desktop bridge MCP**](./desktop-bridge-mcp.md) | MCP server for Cursor — scan apps, read AX trees, generate POMs from chat |
+| Guide | What you will learn |
+|--------|---------------------|
+| [**Browser hub**](./browser/README.md) | Projects, file naming, where to read next |
+| [**Browser automation**](./browser/automation.md) | Chrome / Firefox / WebKit, auth, multi-tab, selectors, `network` fixture |
+| [**Browser POM & tests**](./browser/pom-and-tests.md) | `DriverPage` vs `PageObject`, `pom` fixture, tabs, `resumable`, launch URL |
 
-### Platform guides
+**Projects:** `chrome`, `firefox`, `webkit` · **specs:** `*.browser.spec.ts`
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**Browser automation**](./browser-automation.md) | Chrome / Firefox / WebKit, auth profiles, multi-tab, selectors, **`network`** fixture, `PageObject` pattern |
-| [**Desktop — macOS**](./desktop-macos.md) | Native apps, Accessibility, Apple TV–style flows |
-| [**Desktop — Windows**](./desktop-windows.md) | UIA / PowerShell bridge, running tests on Windows |
-| [**Mobile — iOS**](./mobile-ios.md) | Appium, XCUITest, bundle IDs, simulators |
-| [**Mobile — Android**](./mobile-android.md) | Appium, UiAutomator2, packages & activities |
-| [**API testing**](./api-testing.md) | REST, GraphQL, auth headers, base URL |
+---
 
-### Advanced
+## 5. Desktop (guides)
 
-| Guide | What you'll learn |
-|--------|-------------------|
-| [**Auth & checkpoints**](./advanced-auth-and-checkpoints.md) | `.auth` profiles, checkpoint resume, `runSteps` |
+| Guide | What you will learn |
+|--------|---------------------|
+| [**Desktop hub**](./desktop/README.md) | macOS vs Windows projects |
+| [**macOS**](./desktop/macos.md) | Native apps, Accessibility, launching apps |
+| [**Windows**](./desktop/windows.md) | UIA / PowerShell bridge, running on Windows agents |
+| [**Desktop bridge (MCP)**](./desktop/mcp-bridge.md) | MCP server for Cursor — scan apps, generate POMs from chat |
+
+**Projects:** `desktop-macos`, `desktop-windows` · **specs:** `*.desktop.spec.ts`
+
+---
+
+## 6. Mobile (guides)
+
+| Guide | What you will learn |
+|--------|---------------------|
+| [**Mobile hub**](./mobile/README.md) | iOS vs Android projects |
+| [**iOS**](./mobile/ios.md) | Appium, XCUITest, bundle IDs |
+| [**Android**](./mobile/android.md) | Appium, UiAutomator2, package / activity |
+
+**Projects:** `mobile-ios`, `mobile-android` · **specs:** `*.mobile.spec.ts`
+
+---
+
+## 7. API (guides)
+
+| Guide | What you will learn |
+|--------|---------------------|
+| [**API hub**](./api/README.md) | When to use `api` vs `app` on API project |
+| [**HTTP API testing**](./api/http-testing.md) | REST, GraphQL, auth headers, base URL |
+
+**Project:** `api` · **specs:** `*.api.spec.ts`
+
+---
+
+## Suggested reading order
+
+1. [First test & setup](./configuration/first-test-and-setup.md)  
+2. [Fixtures & `IDriver`](./common/fixtures-and-idriver.md)  
+3. [Architecture overview](./architecture/overview.md) — at least sections 1–5 and your platform’s §13  
+4. Your platform hub: [Browser](./browser/README.md), [Desktop](./desktop/README.md), [Mobile](./mobile/README.md), or [API](./api/README.md)  
+5. [Auth & checkpoints](./common/auth-and-checkpoints.md) when you need sessions or resume  
+6. [Eval](./common/eval-framework.md) / [LLM providers](./common/llm-providers.md) when you use judges or vision-related config  
 
 ---
 
@@ -75,36 +103,37 @@ Use this if you want a single linear path through all docs.
 
 ```bash
 npm install
-npx playwright install   # browser binaries
+npx playwright install    # browser binaries
 
-npm test                          # all projects
-npm run test:chrome             # browser (Chrome project)
-npm run test:desktop            # desktop-macos project
-npm run test:mobile             # mobile-ios project
-npm run test:api                # api project
-npm run build                   # TypeScript compile
-npm run pom:gen                 # auto-generate POM
+npm test                  # all Playwright projects
+npm run test:chrome       # browser — Chrome
+npm run test:desktop      # desktop-macos
+npm run test:mobile       # mobile-ios
+npm run test:api          # api project
+npm run build             # TypeScript compile
+npm run pom:gen           # POM generator CLI
 ```
+
+---
 
 ## Test file naming (important)
 
-Playwright **projects** filter tests by filename pattern:
+| Pattern | Typical projects |
+|---------|------------------|
+| `*.browser.spec.ts` | `chrome`, `firefox`, `webkit` |
+| `*.desktop.spec.ts` | `desktop-macos`, `desktop-windows` |
+| `*.mobile.spec.ts` | `mobile-ios`, `mobile-android` |
+| `*.api.spec.ts` | `api` |
 
-| Pattern | Example | Typical projects |
-|---------|---------|------------------|
-| `*.browser.spec.ts` | `login.browser.spec.ts` | `chrome`, `firefox`, `webkit` |
-| `*.desktop.spec.ts` | `notepad.desktop.spec.ts` | `desktop-macos`, `desktop-windows` |
-| `*.mobile.spec.ts` | `login.mobile.spec.ts` | `mobile-ios`, `mobile-android` |
-| `*.api.spec.ts` | `users.api.spec.ts` | `api` |
+Tests live under `tests/` (see `playwright.config.ts` → `testDir`).
 
-Put files under `tests/` (see `playwright.config.ts` → `testDir`).
+---
 
-## Need help?
+## Where things live in code
 
-- Configuration lives in **`playwright.config.ts`** (projects, timeouts, metadata).
-- Shared test API: **`src/fixtures/index.ts`** (`app`, `pages`, `api`, `auth`, `checkpoint`, **`network`** on browser projects).
-- Unified driver contract: **`src/core/base-driver.ts`** (`IDriver`).
-- LLM provider setup: set `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GEMINI_API_KEY` in `.env`.
-- Cursor rules: `.cursor/rules/desktop-automation.mdc` and `.cursor/rules/eval-framework.mdc`.
+- **Fixtures:** `src/fixtures/index.ts`  
+- **Driver contract:** `src/core/base-driver.ts`  
+- **Playwright config:** `playwright.config.ts`  
+- **Env loading:** `src/core/env-loader.ts`  
 
-If something fails, check the platform guide for prerequisites (Appium, Accessibility permissions, etc.).
+If something fails, open the **platform guide** for prerequisites (Appium, Accessibility permissions, etc.).

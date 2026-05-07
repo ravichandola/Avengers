@@ -1,12 +1,12 @@
 import { Locator, Page } from 'playwright';
 import { resolveSelector } from '../resolve-selector';
 
-/** Root region: CSS selector string ya pehle se bana `Locator` (nested block). */
+/** Root region: a CSS selector string, or an existing Playwright `Locator` (for nested blocks). */
 export type BlockRoot = string | Locator;
 
 /**
  * Scoped UI block — sidebar, modal, card, form section.
- * Saari locators `root` ke andar scope hoti hain.
+ * Every locator is scoped under `root`.
  *
  * ```ts
  * class CartSummary extends Block {
@@ -56,14 +56,14 @@ export class Block {
 
 /**
  * Sidebar / rail — {@link Block} + common nav patterns.
- * Apna root do; warna `[data-testid="sidebar"]` try karega.
+ * Pass your own root, or the default tries `[data-testid="sidebar"]`.
  */
 export class Sidebar extends Block {
   constructor(page: Page, root: BlockRoot = '[data-testid="sidebar"]') {
     super(page, root);
   }
 
-  /** Accessible name se link click (root scope ke andar). */
+  /** Click a link by accessible name (within the root scope). */
   async clickNavLink(name: string | RegExp): Promise<void> {
     await this.root.getByRole('link', { name }).click();
   }

@@ -6,6 +6,8 @@ HTTP tests use the **`api`** fixture, backed by **`APIDriver`**. It shares the s
 
 You test **REST APIs**, optional **GraphQL**, or any JSON **HTTP** surface — without launching a browser.
 
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.4](../architecture/overview.md#134-api-http). **Note:** `APIDriver` is **not** wrapped with `VisionDriverWrapper` (see **DriverFactory + vision wrapper** in [Fixtures & `IDriver`](../common/fixtures-and-idriver.md)).
+
 ## Configuration
 
 ### File naming
@@ -115,5 +117,5 @@ You can still call **`api.launch({ url: 'https://override-base' })`** to change 
 
 ## Related
 
-- [getting-started.md](./getting-started.md)  
-- [advanced-auth-and-checkpoints.md](./advanced-auth-and-checkpoints.md) (different kind of “auth” — browser storage)  
+- [First test & setup](../configuration/first-test-and-setup.md)  
+- [Auth & checkpoints](../common/auth-and-checkpoints.md) (browser storage profiles — not HTTP bearer tokens)  

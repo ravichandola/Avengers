@@ -3,12 +3,20 @@ import { IDriver } from '../core/base-driver';
 import { DriverFactory } from '../core/driver-factory';
 import { Platform, LaunchOptions } from '../core/types';
 import { PageManager } from '../drivers/browser/page-manager';
-import { BrowserDriver } from '../drivers/browser/browser-driver';
 import { APIDriver } from '../drivers/api/api-driver';
 import { AuthManager } from '../auth/auth-manager';
 import { CheckpointManager } from '../session/checkpoint-manager';
-import { runSteps, Step } from '../session/resumable-steps';
+import {
+  createNoopResumableFlow,
+  createResumableFlow,
+  runSteps,
+  Step,
+  type ResumableFlow,
+} from '../session/resumable-steps';
+import { tryUnwrapBrowserDriver } from '../core/unwrap-browser-driver';
+import { PomManager } from '../pom/pom-manager';
 import { resolveConfig } from '../core/config';
+import { resolveBrowserLaunchUrl } from '../core/env-loader';
 import { logger } from '../utils/logger';
 import { NetworkMonitor } from '../drivers/browser/network/network-monitor';
 
@@ -18,6 +26,10 @@ export interface TestFixtures {
   api: APIDriver;
   auth: typeof AuthManager;
   checkpoint: CheckpointManager;
+  /** Linear checkpointed steps — use {@link ResumableFlow.step} instead of building a `Step[]` for {@link runSteps}. */
+  resumable: ResumableFlow;
+  /** Page-object factory + tab helpers for the current {@link IDriver} — see {@link PomManager}. */
+  pom: PomManager;
   network: NetworkMonitor;
 }
 
@@ -32,15 +44,19 @@ function getTaggedValue(title: string, key: string): string | undefined {
 export const test = base.extend<TestFixtures>({
 
   /**
-   * Auto-launched driver — ready to use, no launch() needed in tests.
+   * Auto-launched driver — ready to use; you do not have to call `launch()` in every test.
    *
-   * Platform auto-detect hota hai test file pattern se:
-   *   *.browser.spec.ts → Chrome (ya jo BROWSER_CHANNEL me set ho)
-   *   *.desktop.spec.ts → macOS/Windows app
-   *   *.mobile.spec.ts  → iOS/Android device
-   *   *.api.spec.ts     → API client
+   * **Platform** is inferred from the test file name:
+   *   `*.browser.spec.ts` → browser (`chromium` / channel from env)
+   *   `*.desktop.spec.ts` → macOS or Windows app
+   *   `*.mobile.spec.ts`  → iOS or Android
+   *   `*.api.spec.ts`     → API client
    *
-   * Config .env files se aata hai — test me kuch likhne ki zarurat nahi.
+   * Values come from `.env` / scope env files — you normally do not duplicate them in the test.
+   *
+   * **Browser:** If `BROWSER_BASE_URL` or `BASE_URL` is set, auto-launch may open that URL.
+   * The same fallback applies when you call `app.launch({})`, `app.launch({ url: '' })`, or omit `url`:
+   * see `resolveBrowserLaunchUrl()` in `src/core/env-loader.ts`.
    */
   app: async ({ browser, browserName }, use, testInfo) => {
     const metadata = (testInfo.project as any).metadata ?? {};
@@ -69,7 +85,10 @@ export const test = base.extend<TestFixtures>({
       let shouldLaunch = true;
 
       if (BROWSER_PLATFORMS.includes(platform)) {
-        if (metadata.baseURL) target.url = metadata.baseURL;
+        const url = resolveBrowserLaunchUrl(
+          metadata.baseURL != null ? String(metadata.baseURL) : undefined,
+        );
+        if (url) target.url = url;
       } else if (platform === 'macos' || platform === 'windows') {
         const taggedDesktopApp = getTaggedValue(testInfo.title, 'app');
         if (taggedDesktopApp || metadata.desktop?.appName) {
@@ -152,6 +171,44 @@ export const test = base.extend<TestFixtures>({
     await use(manager);
   },
 
+  resumable: async ({ app }, use, testInfo) => {
+    const bd = tryUnwrapBrowserDriver(app);
+    let inner: ResumableFlow | null = null;
+
+    const ensure = async (): Promise<ResumableFlow> => {
+      if (!inner) {
+        inner = bd
+          ? await createResumableFlow({
+              testId: testInfo.testId,
+              driver: app,
+              getContext: () => bd.getContext(),
+            })
+          : createNoopResumableFlow(app);
+      }
+      return inner;
+    };
+
+    const flow: ResumableFlow = {
+      async step(name, fn) {
+        return (await ensure()).step(name, fn);
+      },
+      async complete() {
+        if (inner) {
+          await inner.complete();
+        }
+      },
+    };
+
+    await use(flow);
+    if (testInfo.status === 'passed') {
+      await flow.complete();
+    }
+  },
+
+  pom: async ({ app }, use) => {
+    await use(new PomManager(app));
+  },
+
   network: async ({}, use, testInfo) => {
     const metadata = (testInfo.project as any).metadata ?? {};
     const platform: Platform = metadata.platform ?? 'chromium';
@@ -189,4 +246,14 @@ export const test = base.extend<TestFixtures>({
   },
 });
 
-export { expect, runSteps, Step, NetworkMonitor };
+export {
+  expect,
+  runSteps,
+  Step,
+  NetworkMonitor,
+  createResumableFlow,
+  createNoopResumableFlow,
+  tryUnwrapBrowserDriver,
+  PomManager,
+  type ResumableFlow,
+};

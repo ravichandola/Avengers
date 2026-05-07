@@ -6,6 +6,8 @@ iOS tests use **Appium** with **XCUITest** (via **WebdriverIO** remote client). 
 
 You automate **iOS apps** (simulator or real device) and already use or can run **Appium 2+**.
 
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.3](../architecture/overview.md#133-mobile-ios--android).
+
 ## Prerequisites
 
 1. **macOS** — Xcode and iOS Simulator (typical dev setup).
@@ -111,5 +113,5 @@ Override via **`playwright.config.ts`** `metadata.mobile` for your project.
 
 ## Related
 
-- **Android:** [mobile-android.md](./mobile-android.md)  
-- **Getting started:** [getting-started.md](./getting-started.md)  
+- **Android:** [Android](./android.md)  
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  

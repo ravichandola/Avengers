@@ -1,3 +1,4 @@
+export { PomManager } from '../../src/pom/pom-manager';
 export { ExampleAuthPage } from './browser/example-auth-page';
 export { AppLoginPage } from './browser/app-login-page';
 export { ShopCheckoutPage } from './browser/shop-checkout-page';

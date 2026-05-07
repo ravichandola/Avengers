@@ -12,13 +12,13 @@ export interface DialogRecord {
 
 /**
  * Alert / confirm / prompt / beforeunload handler.
- * PageManager se attach hota hai har naye page par automatically.
+ * `PageManager` attaches this handler to every new page automatically.
  *
  * ```ts
- * pages.dialogs.setDefault('accept');           // sab accept
- * pages.dialogs.acceptNext('my prompt input');   // agla ek accept with text
- * pages.dialogs.dismissNext();                   // agla ek dismiss
- * pages.dialogs.getHistory();                    // kya kya aaya
+ * pages.dialogs.setDefault('accept');           // accept all by default
+ * pages.dialogs.acceptNext('my prompt input');  // next dialog: accept with prompt text
+ * pages.dialogs.dismissNext();                   // next dialog: dismiss
+ * pages.dialogs.getHistory();                    // inspect what fired
  * ```
  */
 export class DialogHandler {
