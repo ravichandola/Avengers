@@ -128,8 +128,8 @@ flowchart TD
 | `pages` | Yes | — | — | — | Separate `BrowserContext` — mostly auxiliary |
 | `api` | Yes | Yes | Yes | Yes | Dedicated HTTP client |
 | `auth` | Yes | Yes | Yes | Yes | Auth profile helpers |
-| `checkpoint` | Yes | Yes | Yes | Yes | Per-test checkpoint manager instance |
-| `resumable` | Yes** | Yes** | Yes** | No-op | **Needs an underlying `BrowserDriver` for real checkpoints |
+| `checkpoint` | Yes | Yes | Yes | Yes | **`CheckpointManager`** keyed by **`scopedCheckpointTestId(testInfo.testId)`** (worker-safe) |
+| `resumable` | Yes** | Yes** | Yes** | No-op | **`step`** + optional **`checkpoint(name[, segment])`**; needs **`BrowserDriver`** for disk checkpoints. **`resumeKey` / `validateResume`** via **`createResumableFlow`** — [Auth & checkpoints](./auth-and-checkpoints.md) |
 | `network` | Yes | — | — | — | Browser HTTP capture |
 
 More detail: [Browser POM & tests](../browser/pom-and-tests.md), [Auth & checkpoints](./auth-and-checkpoints.md).

@@ -27,6 +27,12 @@ export interface RunResumableStepsOptions<T> {
    * `checkpoint.statePath`, then `navigate(checkpoint.url)`.
    */
   onResume?: (driver: T, checkpoint: CheckpointData) => Promise<void>;
+  /** Persisted with checkpoints; mismatch clears resume without restoring the browser. */
+  resumeKey?: string;
+  /** After `onResume`, return false if prerequisites are missing — checkpoint cleared, full flow runs. */
+  validateResume?: (driver: T, cp: CheckpointData) => boolean | Promise<boolean>;
+  /** When `validateResume` is false (e.g. navigate to a safe URL before step 0). */
+  onResumeInvalidated?: (driver: T) => void | Promise<void>;
   log?: ResumableLog;
 }
 
@@ -46,6 +52,9 @@ export async function runResumableSteps<T>(options: RunResumableStepsOptions<T>)
     getUrl,
     navigate,
     onResume,
+    resumeKey,
+    validateResume,
+    onResumeInvalidated,
     log,
   } = options;
 
@@ -54,23 +63,56 @@ export async function runResumableSteps<T>(options: RunResumableStepsOptions<T>)
     log: checkpointLog,
   });
 
-  const saved = await checkpoint.hasCheckpoint();
-  const useResume = Boolean(resumeEnabled && saved);
-  const startFrom = useResume ? saved!.step + 1 : 0;
+  let saved = await checkpoint.hasCheckpoint();
+  let useResume = Boolean(resumeEnabled && saved);
+  let startFrom =
+    useResume && saved != null && saved.subCheckpoint == null
+      ? saved.step + 1
+      : useResume && saved != null
+        ? saved.step
+        : 0;
 
-  if (useResume) {
+  if (saved && resumeKey !== undefined && saved.resumeKey !== resumeKey) {
+    log?.(
+      'warn',
+      `Checkpoint resumeKey mismatch for "${testId}" — clearing`,
+    );
+    await checkpoint.clear();
+    saved = null;
+    useResume = false;
+    startFrom = 0;
+  }
+
+  if (useResume && saved) {
+    const sub = saved.subCheckpoint;
     log?.(
       'info',
-      `Resuming "${testId}" from step ${startFrom} (${steps[startFrom]?.name ?? 'end'})`,
+      sub != null
+        ? `Resuming "${testId}" at step ${saved.step} after sub-checkpoint "${sub}" (${steps[saved.step]?.name ?? '?'})`
+        : `Resuming "${testId}" from step ${startFrom} (${steps[startFrom]?.name ?? 'end'})`,
     );
     if (onResume) {
-      await onResume(driver, saved!);
+      await onResume(driver, saved);
     } else {
       log?.(
         'warn',
         'runResumableSteps: no onResume — only navigating (cookies/storage may be missing)',
       );
-      await navigate(driver, saved!.url);
+      await navigate(driver, saved.url);
+    }
+    if (validateResume) {
+      const ok = await validateResume(driver, saved);
+      if (!ok) {
+        log?.(
+          'warn',
+          `validateResume rejected restore for "${testId}" — running full flow`,
+        );
+        if (onResumeInvalidated) await onResumeInvalidated(driver);
+        await checkpoint.clear();
+        saved = null;
+        useResume = false;
+        startFrom = 0;
+      }
     }
   }
 
@@ -88,7 +130,7 @@ export async function runResumableSteps<T>(options: RunResumableStepsOptions<T>)
     const ctx = getContext();
     if (ctx) {
       const url = await getUrl(driver);
-      await checkpoint.checkpoint(i, ctx, url);
+      await checkpoint.checkpoint(i, ctx, url, undefined, resumeKey);
     }
   }
 

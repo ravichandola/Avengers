@@ -20,7 +20,7 @@ Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **brows
 | Guide | What you will learn |
 |--------|---------------------|
 | [**Fixtures & `IDriver`**](./common/fixtures-and-idriver.md) | `DriverFactory`, vision vs API drivers, fixture matrix, POM bases (`DriverPage`, `ElementRef`), links to each stack |
-| [**Auth & checkpoints**](./common/auth-and-checkpoints.md) | Saved login profiles (`.auth/`), resume checkpoints (`.checkpoints/`), `resumable` fixture, copyable portable module |
+| [**Auth & checkpoints**](./common/auth-and-checkpoints.md) | Saved login profiles (`.auth/`), resume checkpoints (`.checkpoints/`), optional `resumeKey` + `validateResume` + `uiResumeValidator`, worker-scoped filenames, mid-step `resumable.checkpoint`, `resumable` fixture, copyable portable module |
 | [**Eval framework**](./common/eval-framework.md) | Rule-based and LLM-as-judge evals, alignment, self-consistency |
 | [**LLM providers**](./common/llm-providers.md) | OpenAI, Anthropic, Gemini — env vars and switching models |
 | [**POM generator**](./common/pom-generator.md) | Scaffold page objects from DOM, AX, mobile XML, or API schemas |

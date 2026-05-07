@@ -10,6 +10,8 @@ const channelToBrowser = (ch: string) => {
 };
 
 export default defineConfig({
+  // Checkpoint files key off `scopedCheckpointTestId(testInfo.testId)` in fixtures:
+  // `${testId}-w${process.env.TEST_WORKER_INDEX}` so workers / shared output dirs do not clobber state.
   testDir: './tests',
   timeout: env.timeout,
   retries: env.retries,

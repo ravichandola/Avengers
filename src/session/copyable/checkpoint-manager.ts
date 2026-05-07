@@ -13,6 +13,14 @@ export interface CheckpointManagerOptions {
 
 export interface CheckpointData {
   step: number;
+  /** When set, resume stays on this step and replays until this label (see `createResumableFlow.checkpoint`). */
+  subCheckpoint?: string;
+  /**
+   * Optional stamp (seed version, tenant id, commit hash, etc.). If the next run passes a different
+   * `resumeKey` into the flow runner, the checkpoint is discarded so setup steps are not skipped
+   * against the wrong dataset.
+   */
+  resumeKey?: string;
   url: string;
   statePath: string;
   timestamp: number;
@@ -35,7 +43,13 @@ export class CheckpointManager {
     this.metaPath = path.join(this.rootDir, `${this.id}.json`);
   }
 
-  async checkpoint(step: number, context: BrowserContext, url: string): Promise<void> {
+  async checkpoint(
+    step: number,
+    context: BrowserContext,
+    url: string,
+    subCheckpoint?: string,
+    resumeKey?: string,
+  ): Promise<void> {
     this.ensureDir();
     const statePath = path.join(this.rootDir, `${this.id}.state.json`);
     await context.storageState({ path: statePath });
@@ -46,8 +60,16 @@ export class CheckpointManager {
       statePath,
       timestamp: Date.now(),
     };
+    if (subCheckpoint !== undefined) {
+      data.subCheckpoint = subCheckpoint;
+    }
+    if (resumeKey !== undefined) {
+      data.resumeKey = resumeKey;
+    }
     fs.writeFileSync(this.metaPath, JSON.stringify(data, null, 2));
-    this.log?.('debug', `Saved checkpoint at step ${step} for "${this.id}"`);
+    const sub =
+      subCheckpoint !== undefined ? ` sub="${subCheckpoint}"` : '';
+    this.log?.('debug', `Saved checkpoint at step ${step}${sub} for "${this.id}"`);
   }
 
   async hasCheckpoint(): Promise<CheckpointData | null> {
@@ -62,7 +84,12 @@ export class CheckpointManager {
         return null;
       }
       return data;
-    } catch {
+    } catch (err) {
+      const detail = err instanceof Error ? err.stack ?? err.message : String(err);
+      this.log?.(
+        'warn',
+        `Corrupt checkpoint metadata for "${this.id}" (clearing): ${detail}`,
+      );
       await this.clear();
       return null;
     }
@@ -70,7 +97,8 @@ export class CheckpointManager {
 
   async getResumeStep(): Promise<number> {
     const cp = await this.hasCheckpoint();
-    return cp ? cp.step + 1 : 0;
+    if (!cp) return 0;
+    return cp.subCheckpoint != null ? cp.step : cp.step + 1;
   }
 
   async clear(): Promise<void> {

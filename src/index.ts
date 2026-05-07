@@ -7,6 +7,7 @@ export {
   newContextFromStorageFile,
   CheckpointManager as PortableCheckpointManager,
 } from './session/copyable';
+export { scopedCheckpointTestId } from './session/checkpoint-test-id';
 export type {
   ResumableStep,
   RunResumableStepsOptions,

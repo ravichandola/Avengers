@@ -239,8 +239,8 @@ Most UI automation goes through **`app`** — already launched and ready:
 | **`pages`** | Browser-only multi-tab helpers (`PageManager`) |
 | **`api`** | HTTP tests (`get`/`post`/…) — **auto-configured** from `api.env` |
 | **`auth`** | `AuthManager` — save/load `.auth/*.json` profiles |
-| **`checkpoint`** | Per-test checkpoint manager for resume experiments |
-| **`resumable`** | Linear named steps with the same checkpoint behaviour as `runSteps` (browser `BrowserDriver` underneath) |
+| **`checkpoint`** | **`CheckpointManager`** — filenames include worker index (`scopedCheckpointTestId`) |
+| **`resumable`** | Same semantics as **`runSteps`**, plus **`checkpoint(name[, segment])`** for mid-step resume (browser **`BrowserDriver`** only). Advanced: **`resumeKey`**, **`validateResume`**, **`uiResumeValidator`** via **`createResumableFlow`** / **`runSteps`** — see [Auth & checkpoints](../common/auth-and-checkpoints.md) |
 
 ## Useful npm scripts
 
