@@ -5,8 +5,8 @@ import { AppLoginPage } from '../pom';
 
 /**
  * Multi-user test with different auth profiles.
- * Browser auto-launch hota hai — no launch() needed.
- * Har user ka apna saved session hota hai, switching me re-login nahi hota.
+ * The browser is auto-launched — you normally do not call `launch()` yourself.
+ * Each user has a saved session; switching users does not require logging in again.
  */
 test.describe('Multi-User Scenarios', () => {
   test('admin and regular user see different dashboards', async ({ browser }) => {

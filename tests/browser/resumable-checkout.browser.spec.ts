@@ -1,61 +1,34 @@
-import { test, expect, runSteps, Step } from '../../src/fixtures';
-import { BrowserDriver } from '../../src/drivers/browser/browser-driver';
+import { test, expect } from '../../src/fixtures';
 import { ShopCheckoutPage } from '../pom';
 
 /**
  * Resumable checkout flow with auto-checkpoint.
- * Browser auto-launch hota hai — no launch() needed.
- * If step N fails, next run restores from step N-1 and retries from N.
+ * The browser is auto-launched — you do not need a manual `launch()` for the default case.
+ *
+ * Use the `resumable` fixture for linear steps (same resume behaviour as `runSteps`).
+ * After a failure: `BROWSER_CHECKPOINT_RESUME=true npx playwright test resumable-checkout --project=chrome`
  */
 test.describe('Resumable Checkout Flow', () => {
-  test('multi-step checkout with auto-checkpoint', async ({ app }, testInfo) => {
-    const browserDriver = app as BrowserDriver;
-    const getContext = () => browserDriver.getContext();
+  test('multi-step checkout with auto-checkpoint', async ({ app, pom, resumable }) => {
+    const shop = pom.page(ShopCheckoutPage);
 
-    const steps: Step[] = [
-      {
-        name: 'browse products',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).browseProducts();
-        },
-      },
-      {
-        name: 'add to cart',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).addFirstProductToCart();
-        },
-      },
-      {
-        name: 'go to cart',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).openCart();
-        },
-      },
-      {
-        name: 'proceed to checkout',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).proceedToCheckout();
-        },
-      },
-      {
-        name: 'fill payment info',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).fillPayment('4242424242424242', '12/28', '123');
-        },
-      },
-      {
-        name: 'confirm order',
-        fn: async (driver) => {
-          await new ShopCheckoutPage(driver).confirmOrderAndWait();
-        },
-      },
-    ];
-
-    await runSteps({
-      testId: testInfo.testId,
-      driver: app,
-      steps,
-      getContext,
+    await resumable.step('browse products', async () => {
+      await shop.browseProducts();
+    });
+    await resumable.step('add to cart', async () => {
+      await shop.addFirstProductToCart();
+    });
+    await resumable.step('go to cart', async () => {
+      await shop.openCart();
+    });
+    await resumable.step('proceed to checkout', async () => {
+      await shop.proceedToCheckout();
+    });
+    await resumable.step('fill payment info', async () => {
+      await shop.fillPayment('4242424242424242', '12/28', '123');
+    });
+    await resumable.step('confirm order', async () => {
+      await shop.confirmOrderAndWait();
     });
 
     const title = await app.getTitle();

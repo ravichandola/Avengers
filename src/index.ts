@@ -1,6 +1,22 @@
 export { test, expect } from './fixtures';
 export type { TestFixtures } from './fixtures';
 
+export {
+  runResumableSteps,
+  resumeEnabledFromEnv,
+  newContextFromStorageFile,
+  CheckpointManager as PortableCheckpointManager,
+} from './session/copyable';
+export type {
+  ResumableStep,
+  RunResumableStepsOptions,
+  CheckpointData,
+  CheckpointManagerOptions,
+  CheckpointLog,
+  ResumableLog,
+  NewContextFromStorageOptions,
+} from './session/copyable';
+
 export { IDriver } from './core/base-driver';
 export { DriverFactory } from './core/driver-factory';
 export type { FrameworkConfig, BrowserConfig, DesktopConfig, MobileConfig, APIConfig } from './core/config';

@@ -4,7 +4,7 @@ One API. One config. Any platform. Browser, Desktop, Mobile, API testing through
 
 ## Deep dive (architecture & porting)
 
-For a **top-level map** of the repo — who calls whom, what each layer does, environment and LLM/vision behavior, and a **checklist to port the design** to another framework — see **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)**.
+For a **top-level map** of the repo — who calls whom, what each layer does, environment and LLM/vision behavior, and a **checklist to port the design** to another framework — see **[docs/architecture/overview.md](./docs/architecture/overview.md)** (**§13** = browser / desktop / mobile / API diagrams). The documentation index is **[docs/README.md](./docs/README.md)**. Concepts shared by every platform: **[docs/common/fixtures-and-idriver.md](./docs/common/fixtures-and-idriver.md)**.
 
 ## Quick Start
 
@@ -172,7 +172,7 @@ docs/
   browser-automation.md  # Browser tests, PageObject pattern, network fixture
 ```
 
-For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/pom-generator.md`**. For **HTTP traces** on browser tests, see **`docs/browser-automation.md`** (network fixture + reporter).
+For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/common/pom-generator.md`**. For **HTTP traces** on browser tests, see **`docs/browser/automation.md`** (network fixture + reporter).
 
 ## Requirements
 

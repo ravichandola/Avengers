@@ -6,6 +6,8 @@ Browser tests use Playwright under the hood but expose a **unified `app` fixture
 
 You automate **websites** and run tests on **Chromium (Chrome)**, **Firefox**, or **WebKit** (Safari engine).
 
+**Shared concepts:** [`IDriver`](../../src/core/base-driver.ts), fixtures, env — [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.1](../architecture/overview.md#131-browser-chromium--firefox--webkit).
+
 ## Configuration
 
 ### File naming
@@ -86,6 +88,8 @@ The browser driver resolves a string into a Playwright locator (see `BrowserDriv
 
 For **multiple tabs in one test**, the framework provides **`pages`** — a `PageManager` over a **separate** browser context from `app` in the default fixture setup. The sample `netflix.browser.spec.ts` uses **`pages`** for tab switching.
 
+For multi-tab flows **on the same `app` / `BrowserDriver`**, prefer the **[Browser POM & tests](./pom-and-tests.md)** guide (`pom.newPage`, `pom.browserTabs`).
+
 Typical pattern:
 
 ```typescript
@@ -114,7 +118,7 @@ test('browse with PageObject', async ({ pages }) => {
 });
 ```
 
-Use **`pages.create(MyPageObject)`** if you prefer the factory on `PageManager`. Generated browser POMs are documented in [pom-generator.md](./pom-generator.md) (`DriverPage` vs `PageObject`).
+Use **`pages.create(MyPageObject)`** if you prefer the factory on `PageManager`. Generated browser POMs are documented in [POM generator](../common/pom-generator.md) (`DriverPage` vs `PageObject`).
 
 ## Network capture (`network` fixture)
 
@@ -140,11 +144,11 @@ This uses Playwright’s request/response events (in-process). It does not requi
 
 ## Generating browser POMs from a URL
 
-See **[pom-generator.md](./pom-generator.md)** for `scripts/generate-pom.ts` (default `DriverPage` output, optional `--enhanced` + `PageObject`).
+See **[POM generator](../common/pom-generator.md)** for `scripts/generate-pom.ts` (default `DriverPage` output, optional `--enhanced` + `PageObject`).
 
 ## Authentication without logging in every time
 
-Use **`AuthManager`** with **`setupProfile`** once, then **`app.launch({ authProfile: 'myuser' })`**. Full steps and examples: [advanced-auth-and-checkpoints.md](./advanced-auth-and-checkpoints.md).
+Use **`AuthManager`** with **`setupProfile`** once, then **`app.launch({ authProfile: 'myuser' })`**. Full steps and examples: [Auth & checkpoints](../common/auth-and-checkpoints.md).
 
 ## Vision fallback
 

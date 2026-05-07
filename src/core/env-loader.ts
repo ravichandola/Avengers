@@ -79,6 +79,15 @@ export const env = {
   get browserViewportH(): number { return num('BROWSER_VIEWPORT_HEIGHT', 720); },
   get browserSlowMo():   number  { return num('BROWSER_SLOW_MO', 0); },
 
+  /**
+   * When true, `runSteps` resumes from `.checkpoints/` after a failed run
+   * (restores cookies/localStorage + URL, skips completed steps).
+   * Default false so CI and normal runs always start fresh unless you opt in.
+   */
+  get browserCheckpointResume(): boolean {
+    return bool('BROWSER_CHECKPOINT_RESUME', false);
+  },
+
   // ─── API ─────────────────────────────────────────────────────
   get apiBaseURL():   string           { return str('API_BASE_URL', env.baseURL); },
   get apiTimeout():   number           { return num('API_TIMEOUT', 30_000); },
@@ -111,3 +120,16 @@ export const env = {
   get appiumHost():            string { return str('APPIUM_HOST', 'localhost'); },
   get appiumPort():            number { return num('APPIUM_PORT', 4723); },
 };
+
+/**
+ * Resolves the URL to open for `app.launch` / browser auto-launch.
+ * Non-empty `explicitUrl` wins; otherwise uses `BROWSER_BASE_URL` or `BASE_URL` from `.env`
+ * (same chain as {@link env.browserBaseURL}). Omitting `url`, passing `''`, or whitespace
+ * counts as “not set” and falls back to env when configured.
+ */
+export function resolveBrowserLaunchUrl(explicitUrl?: string): string | undefined {
+  const trimmed = explicitUrl?.trim() ?? '';
+  if (trimmed.length > 0) return trimmed;
+  const fromEnv = env.browserBaseURL.trim();
+  return fromEnv.length > 0 ? fromEnv : undefined;
+}

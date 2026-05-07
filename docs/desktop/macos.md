@@ -6,6 +6,8 @@ Native macOS UI automation uses **Accessibility (AX)** via adapters (AppleScript
 
 You automate **Mac apps** (e.g. Apple TV, Notes, Safari dialogs) on **macOS hosts**.
 
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows).
+
 ## Prerequisites
 
 1. **Run tests on macOS** — desktop macOS projects are meant for a Mac runner (local Mac or macOS CI).
@@ -154,5 +156,5 @@ await app.click('New Note');
 
 ## Related
 
-- **Windows desktop:** [desktop-windows.md](./desktop-windows.md)  
-- **Unified API:** [getting-started.md](./getting-started.md)  
+- **Windows desktop:** [Windows](./windows.md)  
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  

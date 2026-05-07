@@ -2,7 +2,7 @@ import { MobileDriver } from '../mobile-driver';
 import { ElementRef } from '../../../pom/element-ref';
 
 /**
- * Mobile screen POM base — locators top pe define karo, methods me use karo.
+ * Mobile screen POM base — define locators as fields, use them in methods.
  *
  * ```ts
  * class LoginScreen extends MobileScreen {

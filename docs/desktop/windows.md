@@ -6,6 +6,8 @@ Windows automation uses **UI Automation–style** interaction via **PowerShell /
 
 You run tests on **Windows** and automate **desktop apps** (Win32, WPF, etc.), not the browser projects.
 
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows).
+
 ## Prerequisites
 
 1. **Windows host** — run Playwright on a Windows machine or VM.
@@ -121,5 +123,5 @@ await app.fill('text_editor', 'Hello from automation');
 
 ## Related
 
-- **macOS desktop:** [desktop-macos.md](./desktop-macos.md)  
-- **Getting started:** [getting-started.md](./getting-started.md)  
+- **macOS desktop:** [macOS](./macos.md)  
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  

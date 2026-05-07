@@ -6,6 +6,8 @@ Android tests use **Appium** with **UiAutomator2** (via **WebdriverIO** remote).
 
 You automate **Android** apps (emulator or device) with **Appium 2+**.
 
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.3](../architecture/overview.md#133-mobile-ios--android).
+
 ## Prerequisites
 
 1. **Android SDK / emulator** or physical device with USB debugging.
@@ -100,5 +102,5 @@ Prefer **content-desc**, **resource-id**, or stable selectors your `findElement`
 
 ## Related
 
-- **iOS:** [mobile-ios.md](./mobile-ios.md)  
-- **Getting started:** [getting-started.md](./getting-started.md)  
+- **iOS:** [iOS](./ios.md)  
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  

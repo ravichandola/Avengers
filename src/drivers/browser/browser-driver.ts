@@ -6,6 +6,8 @@ import { PageManager } from './page-manager';
 import { PageObject } from './pom/page-object';
 import { AuthManager } from '../../auth/auth-manager';
 import { logger } from '../../utils/logger';
+import { newContextFromStorageFile } from '../../session/copyable/playwright-resume';
+import { resolveBrowserLaunchUrl } from '../../core/env-loader';
 import { resolveSelector } from './resolve-selector';
 
 export class BrowserDriver implements IDriver {
@@ -33,10 +35,12 @@ export class BrowserDriver implements IDriver {
   }
 
   async launch(target: LaunchOptions): Promise<void> {
+    const launchUrl = resolveBrowserLaunchUrl(target.url);
+
     if (this.context && this._pageManager) {
-      if (target.url) {
-        await this.page.goto(target.url, { waitUntil: 'domcontentloaded' });
-        logger.info('BrowserDriver', `Navigated → ${target.url}`);
+      if (launchUrl) {
+        await this.page.goto(launchUrl, { waitUntil: 'domcontentloaded' });
+        logger.info('BrowserDriver', `Navigated → ${launchUrl}`);
       }
       return;
     }
@@ -85,11 +89,33 @@ export class BrowserDriver implements IDriver {
     const page = await this.context.newPage();
     this._pageManager = new PageManager(this.context);
 
-    if (target.url) {
-      await page.goto(target.url, { waitUntil: 'domcontentloaded' });
+    if (launchUrl) {
+      await page.goto(launchUrl, { waitUntil: 'domcontentloaded' });
     }
 
-    logger.info('BrowserDriver', `Launched ${this.platform}${target.url ? ` → ${target.url}` : ''}${storageState ? ' (authenticated)' : ''}`);
+    logger.info('BrowserDriver', `Launched ${this.platform}${launchUrl ? ` → ${launchUrl}` : ''}${storageState ? ' (authenticated)' : ''}`);
+  }
+
+  /**
+   * Drop the current context and open a new one from Playwright storageState.
+   * Same Browser instance is kept (fixture-supplied or launched). Used when
+   * resuming a checkpointed `runSteps` flow.
+   */
+  async recreateContextFromStorageState(storageStatePath: string): Promise<void> {
+    const browser = this.externalBrowser ?? this.ownedBrowser;
+    if (!browser) throw new Error('BrowserDriver: no browser — call launch() first');
+
+    const viewport = this.config.browser?.viewport ?? { width: 1280, height: 720 };
+    this.context = await newContextFromStorageFile({
+      browser,
+      storagePath: storageStatePath,
+      viewport,
+      closePrevious: this.context,
+    });
+    this._pageManager = null;
+    await this.context.newPage();
+    this._pageManager = new PageManager(this.context);
+    logger.info('BrowserDriver', `Context recreated from storage state: ${storageStatePath}`);
   }
 
   async close(): Promise<void> {
@@ -187,7 +213,7 @@ export class BrowserDriver implements IDriver {
     return this._pageManager;
   }
 
-  /** Current tab par full-page POM (`PageObject`). */
+  /** Full-page `PageObject` for the current tab. */
   asPageObject(): PageObject {
     return new PageObject(this.pages.current());
   }

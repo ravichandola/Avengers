@@ -236,7 +236,7 @@ export class NotesScreen extends DesktopPage {
 
 ## 7. MCP (desktop)
 
-Cursor can trigger **`generate_pom`** on the **desktop** bridge (AX-based). That path is independent of the browser DOM scanner. See [desktop-bridge-mcp.md](./desktop-bridge-mcp.md).
+Cursor can trigger **`generate_pom`** on the **desktop** bridge (AX-based). That path is independent of the browser DOM scanner. See [Desktop bridge (MCP)](../desktop/mcp-bridge.md).
 
 ---
 

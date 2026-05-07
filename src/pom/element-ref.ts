@@ -2,8 +2,8 @@ import { IDriver } from '../core/base-driver';
 import { WaitOptions } from '../core/types';
 
 /**
- * Lazy element reference — desktop/mobile/any IDriver ke liye "Locator" equivalent.
- * POM class me top pe define karo, methods me use karo — selector baar baar pass nahi karna.
+ * Lazy element reference — a small "locator" wrapper for any `IDriver` (desktop, mobile, browser).
+ * Define fields at the top of your POM class and call `click` / `fill` on them so you do not repeat selectors.
  *
  * ```ts
  * class LoginScreen extends MobileScreen {

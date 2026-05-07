@@ -4,9 +4,9 @@ import { ExampleAuthPage } from '../pom';
 
 /**
  * Auth profile setup and reuse.
- * Browser auto-launch hota hai — no launch() needed.
- * First run login flow execute karta hai aur profile save karta hai.
- * Subsequent runs saved state load karte hain, login skip hota hai.
+ * The browser is auto-launched — you normally do not call `launch()` yourself.
+ * The first run executes the login flow and saves the profile.
+ * Later runs load that saved state and skip login.
  */
 test.describe('Auth Profile Persistence', () => {
   const PROFILE_NAME = 'test-user';

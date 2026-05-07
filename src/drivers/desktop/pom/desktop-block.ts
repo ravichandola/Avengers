@@ -3,7 +3,7 @@ import { ElementRef } from '../../../pom/element-ref';
 
 /**
  * Scoped desktop block — toolbar, panel, dialog section.
- * Selector prefix automatically prepend hota hai.
+ * A selector prefix is prepended automatically.
  *
  * ```ts
  * class Toolbar extends DesktopBlock {
