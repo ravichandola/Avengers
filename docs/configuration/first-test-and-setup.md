@@ -265,5 +265,5 @@ Most UI automation goes through **`app`** — already launched and ready:
 - **Desktop:** [macOS](../desktop/macos.md) / [Windows](../desktop/windows.md)  
 - **Mobile:** [iOS](../mobile/ios.md) / [Android](../mobile/android.md)  
 - **HTTP:** [HTTP API testing](../api/http-testing.md)  
-- **Auth & resume:** [Auth & checkpoints](../common/auth-and-checkpoints.md)  
+- **Auth & resume:** [Using checkpoints in tests](../common/checkpoints-in-tests.md) (beginner) · [Auth & checkpoints](../common/auth-and-checkpoints.md) (full reference)  
 - **Architecture:** [Architecture overview](../architecture/overview.md) — full system design and porting guide  

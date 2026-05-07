@@ -1,5 +1,7 @@
 # Advanced: saved browser auth & resume-from-failure
 
+**New to save-and-resume only?** Start with the beginner guide: [Using checkpoints in tests](./checkpoints-in-tests.md).
+
 These features sit on top of browser automation: **named login profiles** (`.auth/*.json`) and **step checkpoints** (`.checkpoints/*`) for resuming long flows.
 
 ## Saved auth profiles (`AuthManager`)

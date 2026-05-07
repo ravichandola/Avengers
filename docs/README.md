@@ -20,6 +20,7 @@ Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **brows
 | Guide | What you will learn |
 |--------|---------------------|
 | [**Fixtures & `IDriver`**](./common/fixtures-and-idriver.md) | `DriverFactory`, vision vs API drivers, fixture matrix, POM bases (`DriverPage`, `ElementRef`), links to each stack |
+| [**Using checkpoints in tests**](./common/checkpoints-in-tests.md) | **Beginner guide:** `resumable`, `runSteps`, `BROWSER_CHECKPOINT_RESUME`, `.checkpoints/` layout, limitations |
 | [**Auth & checkpoints**](./common/auth-and-checkpoints.md) | Saved login profiles (`.auth/`), resume checkpoints (`.checkpoints/`), optional `resumeKey` + `validateResume` + `uiResumeValidator`, worker-scoped filenames, mid-step `resumable.checkpoint`, `resumable` fixture, copyable portable module |
 | [**Eval framework**](./common/eval-framework.md) | Rule-based and LLM-as-judge evals, alignment, self-consistency |
 | [**LLM providers**](./common/llm-providers.md) | OpenAI, Anthropic, Gemini — env vars and switching models |
@@ -94,7 +95,7 @@ Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **brows
 2. [Fixtures & `IDriver`](./common/fixtures-and-idriver.md)  
 3. [Architecture overview](./architecture/overview.md) — at least sections 1–5 and your platform’s §13  
 4. Your platform hub: [Browser](./browser/README.md), [Desktop](./desktop/README.md), [Mobile](./mobile/README.md), or [API](./api/README.md)  
-5. [Auth & checkpoints](./common/auth-and-checkpoints.md) when you need sessions or resume  
+5. [Using checkpoints in tests](./common/checkpoints-in-tests.md) for save-and-resume basics, then [Auth & checkpoints](./common/auth-and-checkpoints.md) for sessions and advanced resume options  
 6. [Eval](./common/eval-framework.md) / [LLM providers](./common/llm-providers.md) when you use judges or vision-related config  
 
 ---
