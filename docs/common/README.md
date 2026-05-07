@@ -5,7 +5,8 @@ These pages describe features that **every platform** can use: the same **`IDriv
 | Guide | What you will learn |
 |--------|---------------------|
 | [**Fixtures & `IDriver`**](./fixtures-and-idriver.md) | Factory, vision wrapper, env layers, fixture matrix, `DriverPage` / `ElementRef`, links to browser / desktop / mobile / API guides |
-| [**Auth & checkpoints**](./auth-and-checkpoints.md) | `.auth` storage, `.checkpoints` resume, `resumable`, portable `copyable/` module |
+| [**Using checkpoints in tests**](./checkpoints-in-tests.md) | **Beginner path:** `resumable` fixture, `runSteps`, resume env var, `.checkpoints/` files, when to use / limitations |
+| [**Auth & checkpoints**](./auth-and-checkpoints.md) | `.auth` storage, `.checkpoints` resume, `resumeKey` / `validateResume` / `uiResumeValidator`, worker-scoped `testId`, mid-step `resumable.checkpoint`, portable `copyable/` module |
 | [**Eval framework**](./eval-framework.md) | Rule-based and LLM judges, datasets, alignment |
 | [**LLM providers**](./llm-providers.md) | API keys, models, switching providers |
 | [**POM generator**](./pom-generator.md) | CLI to scaffold POMs from DOM, AX, mobile, or OpenAPI-style inputs |

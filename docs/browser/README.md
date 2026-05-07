@@ -6,6 +6,7 @@ Browser automation uses **Playwright** (Chromium / Chrome, Firefox, WebKit). Spe
 |--------|---------------------|
 | [**Browser automation**](./automation.md) | Projects, `app` / `pages`, selectors, **`network`** fixture, auth profiles |
 | [**Browser POM & tests**](./pom-and-tests.md) | `DriverPage` vs `PageObject`, **`pom`** fixture, multi-tab, **`resumable`**, launch URL |
+| [**Using checkpoints in tests**](../common/checkpoints-in-tests.md) | Beginner guide: **`resumable`**, resume env var, `.checkpoints/` |
 
 **Architecture (how it is built):** [Browser stack](../architecture/browser.md)  
 **Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md)

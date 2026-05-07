@@ -8,7 +8,7 @@ Web automation uses **Playwright** underneath: one shared **`Browser`** from the
 2. **`BrowserDriver`** opens a **context** (viewport, optional `storageState`) and a default **page**.  
 3. Your POM calls **`IDriver`** methods (`click`, `fill`, `navigate`, …). **`BrowserDriver`** maps those to the **active** `Page` (`PageManager.current()`).  
 4. Optional: **`network`** fixture listens to request/response events on a `Page`.  
-5. Optional: **checkpoints** write `storageState` + URL under `.checkpoints/` for resume (see [Auth & checkpoints](../common/auth-and-checkpoints.md)).
+5. Optional: **checkpoints** write `storageState` + URL under `.checkpoints/` for resume; optional **`resumeKey`** / **`validateResume`** (or **`uiResumeValidator`**) catch browser–server drift (see [Auth & checkpoints](../common/auth-and-checkpoints.md)).
 
 ## Diagram (same as overview §13.1)
 

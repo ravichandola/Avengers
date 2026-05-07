@@ -6,13 +6,25 @@ import { PageManager } from '../drivers/browser/page-manager';
 import { APIDriver } from '../drivers/api/api-driver';
 import { AuthManager } from '../auth/auth-manager';
 import { CheckpointManager } from '../session/checkpoint-manager';
+import { scopedCheckpointTestId } from '../session/checkpoint-test-id';
 import {
   createNoopResumableFlow,
   createResumableFlow,
   runSteps,
+  uiResumeValidator,
   Step,
   type ResumableFlow,
+  type CreateResumableFlowOptions,
+  type RunStepsOptions,
 } from '../session/resumable-steps';
+import {
+  checkpointDataToResumableBrowser,
+  resumableBrowserToCheckpointData,
+  resumeOptionsForDriver,
+  type BrowserCheckpoint,
+  type ResumableBrowserCheckpoint,
+  type ResumeOptions,
+} from '../session/checkpoint-contracts';
 import { tryUnwrapBrowserDriver } from '../core/unwrap-browser-driver';
 import { PomManager } from '../pom/pom-manager';
 import { resolveConfig } from '../core/config';
@@ -167,7 +179,7 @@ export const test = base.extend<TestFixtures>({
   },
 
   checkpoint: async ({}, use, testInfo) => {
-    const manager = new CheckpointManager(testInfo.testId);
+    const manager = new CheckpointManager(scopedCheckpointTestId(testInfo.testId));
     await use(manager);
   },
 
@@ -179,7 +191,7 @@ export const test = base.extend<TestFixtures>({
       if (!inner) {
         inner = bd
           ? await createResumableFlow({
-              testId: testInfo.testId,
+              testId: scopedCheckpointTestId(testInfo.testId),
               driver: app,
               getContext: () => bd.getContext(),
             })
@@ -191,6 +203,9 @@ export const test = base.extend<TestFixtures>({
     const flow: ResumableFlow = {
       async step(name, fn) {
         return (await ensure()).step(name, fn);
+      },
+      async checkpoint(name, segment) {
+        return (await ensure()).checkpoint(name, segment);
       },
       async complete() {
         if (inner) {
@@ -253,7 +268,17 @@ export {
   NetworkMonitor,
   createResumableFlow,
   createNoopResumableFlow,
+  uiResumeValidator,
+  checkpointDataToResumableBrowser,
+  resumableBrowserToCheckpointData,
+  resumeOptionsForDriver,
   tryUnwrapBrowserDriver,
   PomManager,
+  scopedCheckpointTestId,
   type ResumableFlow,
+  type CreateResumableFlowOptions,
+  type RunStepsOptions,
+  type BrowserCheckpoint,
+  type ResumableBrowserCheckpoint,
+  type ResumeOptions,
 };

@@ -159,7 +159,7 @@ For **`PageObject`** POMs, use **`page`** from the underlying class if you expos
 
 ## Checkpoint-friendly tests (`resumable`)
 
-For long flows, use the **`resumable`** fixture so each **named step** can save storage + URL under `.checkpoints/` (see [Auth & checkpoints](../common/auth-and-checkpoints.md)).
+For long flows, use the **`resumable`** fixture so each **named step** can save storage + URL under `.checkpoints/` (see [Auth & checkpoints](../common/auth-and-checkpoints.md)). For **resume safety** when server data may not match the saved browser state (seed changes, disposable backend context), use **`createResumableFlow`** with **`resumeKey`**, **`validateResume`**, **`uiResumeValidator`**, and optionally **`onResumeInvalidated`** — the default **`resumable`** fixture does not pass those options.
 
 Linear style:
 
@@ -180,6 +180,23 @@ test('long flow', async ({ app, pom, resumable }) => {
 ```
 
 On **pass**, the fixture clears checkpoints for that test. With **`BROWSER_CHECKPOINT_RESUME=true`**, a **retry** can skip completed steps.
+
+Mid-step saves (long single step):
+
+```typescript
+await resumable.step('checkout', async () => {
+  await resumable.checkpoint('after-cart', async () => {
+    await shop.addFirstProductToCart();
+    await shop.openCart();
+  });
+  await resumable.checkpoint('after-shipping', async () => {
+    await shop.fillShipping();
+  });
+  await shop.pay();
+});
+```
+
+On resume, earlier **`checkpoint(..., segment)`** blocks whose labels come **before** the saved **`subCheckpoint`** skip their **`segment`** only; keep fragile UI inside those segments. Details: [Auth & checkpoints](../common/auth-and-checkpoints.md).
 
 ---
 
