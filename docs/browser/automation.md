@@ -88,7 +88,7 @@ The browser driver resolves a string into a Playwright locator (see `BrowserDriv
 
 For **multiple tabs in one test**, the framework provides **`pages`** — a `PageManager` over a **separate** browser context from `app` in the default fixture setup. The sample `netflix.browser.spec.ts` uses **`pages`** for tab switching.
 
-For multi-tab flows **on the same `app` / `BrowserDriver`**, prefer the **[Browser POM & tests](./pom-and-tests.md)** guide (`pom.newPage`, `pom.browserTabs`).
+For multi-tab flows **on the same `app` / `BrowserDriver`**, use **`narrator.newPage`** for POMs and **`pom.newPage` / `pom.browserTabs`** for tabs — [Browser POM & tests](./pom-and-tests.md).
 
 Typical pattern:
 
@@ -109,7 +109,7 @@ When you want **native Playwright `Locator`** fields instead of `IDriver` + `ele
 
 ```typescript
 import { test, expect } from '../../src/fixtures';
-import { NetflixBrowsePage } from '../pom/browser/netflix-browse-page';
+import { NetflixBrowsePage } from '../pom';
 
 test('browse with PageObject', async ({ pages }) => {
   const netflix = new NetflixBrowsePage(pages.current());

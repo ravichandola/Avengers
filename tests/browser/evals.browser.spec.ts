@@ -13,7 +13,7 @@
  *   https://developer.chrome.com/docs/ai/evals/rule-based
  */
 
-import { test, expect } from '../../src/fixtures';
+import { test, expect, narrator } from '../../src/fixtures';
 import { NetflixPage } from '../pom';
 import {
   EvalLabel,
@@ -34,9 +34,9 @@ test.describe('Eval Pipeline — Browser Landing Page', () => {
 
   // ─── 1. Rule-based eval ─────────────────────────────────────────────
 
-  test('rule-based: validates URL domain and title are present', async ({ app }) => {
-    const netflix = new NetflixPage(app);
-    await netflix.openHome();
+  test('rule-based: validates URL domain and title are present', async ({ app: _app }) => {
+    const netflix = narrator.newPage(NetflixPage);
+    await netflix.open();
 
     const url = await netflix.getURL();
     const title = await netflix.getTitle();
@@ -54,14 +54,14 @@ test.describe('Eval Pipeline — Browser Landing Page', () => {
 
   // ─── 2. LLM judge single verdict ───────────────────────────────────
 
-  test('llm judge: validates landing page quality (PASS/FAIL)', async ({ app }) => {
+  test('llm judge: validates landing page quality (PASS/FAIL)', async ({ app: _app }) => {
     test.skip(
       !process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY,
       'LLM judge key not configured',
     );
 
-    const netflix = new NetflixPage(app);
-    await netflix.openHome();
+    const netflix = narrator.newPage(NetflixPage);
+    await netflix.open();
 
     const verdict = await netflix.judgeLandingQuality();
     expect(verdict.rationale.length).toBeGreaterThan(0);

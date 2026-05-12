@@ -13,7 +13,7 @@
  *   const consistency = await runner.runSelfConsistency(entries, 5);
  */
 
-import { LlmJudge, JudgeOutcome } from './judge';
+import { LlmJudge } from './judge';
 import {
   EvalLabel,
   EvalResult,

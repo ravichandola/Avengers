@@ -1,27 +1,29 @@
-import type { Page } from 'playwright';
-import type { IDriver } from '../core/base-driver';
-import { tryUnwrapBrowserDriver } from '../core/unwrap-browser-driver';
-import type { BrowserDriver } from '../drivers/browser/browser-driver';
-import type { PageManager } from '../drivers/browser/page-manager';
-import { PageObject } from '../drivers/browser/pom/page-object';
-import { DriverPage } from './driver-page';
+import type { Page } from "playwright";
+import type { IDriver } from "../core/base-driver";
+import { tryUnwrapBrowserDriver } from "../core/unwrap-browser-driver";
+import type { BrowserDriver } from "../drivers/browser/browser-driver";
+import type { PageManager } from "../drivers/browser/page-manager";
+import { narrator } from "../drivers/browser/browser-narrator";
+import { PageObject } from "../drivers/browser/pom/page-object";
+import { DriverPage } from "./driver-page";
 
 /**
- * Single entry to build POMs against the current {@link IDriver} (and browser tabs).
+ * Browser tab + navigation helper tied to the same {@link IDriver} as {@link app}.
+ *
+ * **Page objects:** use **`narrator.newPage(MyPom)`** from **`src/fixtures`** — one lazy,
+ * read-only factory for both {@link DriverPage} and {@link PageObject} (see {@link BrowserNarrator}).
+ * This class does **not** duplicate that API to avoid two mental models.
  *
  * ```ts
- * const shop = pom.page(ShopCheckoutPage);
- * await shop.browseProducts();
+ * import { test, narrator, pom } from '../../src/fixtures';
  *
- * const netflix = pom.page(NetflixPage);
- * await netflix.signIn.click();
- *
- * await pom.newPage('https://…');
- * const other = pom.page(OtherDriverPage);
+ * test('flow', async ({ app, pom }) => {
+ *   await app.launch({ url: 'https://playwright.dev/' });
+ *   const site = narrator.newPage(PlaywrightSiteDriverPage);
+ *   await pom.newPage('https://playwright.dev/docs/pom');
+ *   const doc = narrator.newPage(PlaywrightDocsPage);
+ * });
  * ```
- *
- * - **DriverPage** subclasses receive the same `IDriver` (vision-wrapped or not).
- * - **PageObject** subclasses are bound to the **active** Playwright tab (see {@link BrowserDriver.pages}).
  */
 export class PomManager {
   constructor(private readonly driver: IDriver) {}
@@ -32,55 +34,57 @@ export class PomManager {
   }
 
   /**
-   * Open a new tab (optional `url`); it becomes the active tab for subsequent {@link page} **PageObject** calls.
-   * For **DriverPage** POMs that use `BrowserDriver.pages` internally, the active tab is already updated.
+   * Open a new tab (optional `url`); it becomes the active tab for **`narrator.page`**
+   * and the next **`narrator.newPage(...)`** resolution.
    */
   async newPage(url?: string): Promise<void> {
     await this.requireBrowser().pages.openNewTab(url);
+    if (narrator.isBound()) narrator.resetPageInstances();
   }
 
   /**
-   * New tab plus a **PageObject** bound to that tab (active tab is the new page).
+   * Open a new tab then return a **lazy** POM for that tab (same as {@link narrator.newPage} after {@link newPage}).
    */
   async newPagePom<T extends PageObject>(
     PageClass: new (page: Page) => T,
     url?: string,
-  ): Promise<T> {
-    const page = await this.requireBrowser().pages.openNewTab(url);
-    return new PageClass(page);
+  ): Promise<Readonly<T>>;
+
+  async newPagePom<T extends DriverPage>(
+    PageClass: new (driver: IDriver) => T,
+    url?: string,
+  ): Promise<Readonly<T>>;
+
+  async newPagePom(
+    PageClass: new (pageOrDriver: Page | IDriver, ...args: unknown[]) => unknown,
+    url?: string,
+  ): Promise<Readonly<unknown>> {
+    await this.requireBrowser().pages.openNewTab(url);
+    if (narrator.isBound()) narrator.resetPageInstances();
+    return narrator.newPage(PageClass as Parameters<typeof narrator.newPage>[0]);
   }
 
   switchToTab(index: number): void {
     this.requireBrowser().pages.switchTo(index);
+    if (narrator.isBound()) narrator.resetPageInstances();
   }
 
   async switchToTabTitle(title: string): Promise<void> {
     await this.requireBrowser().pages.switchToTitle(title);
+    if (narrator.isBound()) narrator.resetPageInstances();
   }
 
   async switchToTabURL(urlPattern: string | RegExp): Promise<void> {
     await this.requireBrowser().pages.switchToURL(urlPattern);
-  }
-
-  page<T extends DriverPage>(PageClass: new (driver: IDriver) => T): T;
-  page<T extends PageObject>(PageClass: new (page: Page) => T): T;
-  page(PageClass: (new (driver: IDriver) => DriverPage) | (new (page: Page) => PageObject)): DriverPage | PageObject {
-    if (PageClass.prototype instanceof DriverPage) {
-      return new (PageClass as new (driver: IDriver) => DriverPage)(this.driver);
-    }
-    if (PageClass.prototype instanceof PageObject) {
-      const bd = this.requireBrowser();
-      return new (PageClass as new (page: Page) => PageObject)(bd.pages.current());
-    }
-    throw new Error(
-      `PomManager.page: ${(PageClass as { name?: string }).name ?? 'Class'} must extend DriverPage or PageObject`,
-    );
+    if (narrator.isBound()) narrator.resetPageInstances();
   }
 
   private requireBrowser(): BrowserDriver {
     const bd = tryUnwrapBrowserDriver(this.driver);
     if (!bd) {
-      throw new Error('PomManager: browser DriverPage / PageObject requires a BrowserDriver (or vision-wrapped browser)');
+      throw new Error(
+        "PomManager: browser tabs require a BrowserDriver (or vision-wrapped browser)",
+      );
     }
     return bd;
   }

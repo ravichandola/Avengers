@@ -1,7 +1,7 @@
 import { IDriver } from '../core/base-driver';
 import { WaitOptions } from '../core/types';
 import { ElementRef } from './element-ref';
-import { LlmJudge, JudgeOutcome } from '../eval/judge';
+import { LlmJudge, JudgeOutcome, JudgeJsonOutcome } from '../eval/judge';
 import { EvalRunner } from '../eval/eval-runner';
 import {
   EvalLabel,
@@ -96,6 +96,16 @@ export abstract class DriverPage {
    */
   protected async judgePassFail(request: JudgeRequest): Promise<JudgeOutcome> {
     return this.judge.evaluate(request);
+  }
+
+  /** LLM completes with arbitrary JSON (`completeJson`). See {@link CalculatorScreen.judgeArithmeticWithLLM}. */
+  protected judgeJson<T>(opts: {
+    prompt: string;
+    systemInstruction?: string;
+    temperature?: number;
+    maxTokens?: number;
+  }): Promise<JudgeJsonOutcome<T>> {
+    return this.judge.completeJson<T>(opts);
   }
 
   // ─── Alignment testing ──────────────────────────────────────────────

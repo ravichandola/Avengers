@@ -1,6 +1,6 @@
 import { IDriver } from '../../core/base-driver';
 import { FrameworkConfig, APIConfig } from '../../core/config';
-import { LaunchOptions, WaitOptions, UIElement, APIResponse, RequestOptions } from '../../core/types';
+import { LaunchOptions, UIElement, APIResponse, RequestOptions } from '../../core/types';
 import { logger } from '../../utils/logger';
 
 export class APIDriver implements IDriver {

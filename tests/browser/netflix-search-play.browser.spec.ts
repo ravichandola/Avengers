@@ -1,4 +1,4 @@
-import { test, expect } from '../../src/fixtures';
+import { test, expect, narrator } from '../../src/fixtures';
 import { NetflixBrowsePage } from '../pom';
 
 /**
@@ -14,9 +14,12 @@ import { NetflixBrowsePage } from '../pom';
 test.describe('Netflix - Search Dhurandhar & Play with Network Trace', () => {
   test.setTimeout(120_000);
 
-  test('search for Dhurandhar, play the movie, and capture all network calls @network', async ({ pages, network }) => {
-    const page = pages.current();
-    const netflix = new NetflixBrowsePage(page);
+  test('search for Dhurandhar, play the movie, and capture all network calls @network', async ({
+    app: _app,
+    network,
+  }) => {
+    const netflix = narrator.newPage(NetflixBrowsePage);
+    const page = narrator.page;
 
     // ─── Start network monitoring BEFORE any navigation ─────
     network.start(page, 'netflix-dhurandhar-search-play');
@@ -141,9 +144,12 @@ test.describe('Netflix - Search Dhurandhar & Play with Network Trace', () => {
     await netflix.goBackToBrowse();
   });
 
-  test('search for Dhurandhar and verify API call count @network', async ({ pages, network }) => {
-    const page = pages.current();
-    const netflix = new NetflixBrowsePage(page);
+  test('search for Dhurandhar and verify API call count @network', async ({
+    app: _app,
+    network,
+  }) => {
+    const netflix = narrator.newPage(NetflixBrowsePage);
+    const page = narrator.page;
 
     network.start(page, 'netflix-dhurandhar-api-count');
 

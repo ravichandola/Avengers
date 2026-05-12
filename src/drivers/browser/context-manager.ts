@@ -1,13 +1,13 @@
-import { Browser, BrowserContext } from 'playwright';
-import { AuthManager } from '../../auth/auth-manager';
-import { logger } from '../../utils/logger';
+import { Browser, BrowserContext } from "playwright";
+import { AuthManager } from "../../auth/auth-manager";
+import { logger } from "../../utils/logger";
 
 export interface ContextOptions {
   viewport?: { width: number; height: number };
   storageState?: string;
   authProfile?: string;
   locale?: string;
-  colorScheme?: 'light' | 'dark' | 'no-preference';
+  colorScheme?: "light" | "dark" | "no-preference";
   permissions?: string[];
   geolocation?: { latitude: number; longitude: number };
 }
@@ -33,9 +33,14 @@ export class ContextManager {
 
   constructor(private readonly browser: Browser) {}
 
-  async create(name: string, options?: ContextOptions): Promise<BrowserContext> {
+  async create(
+    name: string,
+    options?: ContextOptions,
+  ): Promise<BrowserContext> {
     if (this.contexts.has(name)) {
-      throw new Error(`Context "${name}" already exists. Use switch() or close() first.`);
+      throw new Error(
+        `Context "${name}" already exists. Use switch() or close() first.`,
+      );
     }
 
     let storageState: string | undefined = options?.storageState;
@@ -57,7 +62,7 @@ export class ContextManager {
 
     this.contexts.set(name, ctx);
     this._currentName = name;
-    logger.info('ContextManager', `Created context: ${name}`);
+    logger.info("ContextManager", `Created context: ${name}`);
     return ctx;
   }
 
@@ -70,12 +75,12 @@ export class ContextManager {
   switch(name: string): BrowserContext {
     const ctx = this.get(name);
     this._currentName = name;
-    logger.info('ContextManager', `Switched to context: ${name}`);
+    logger.info("ContextManager", `Switched to context: ${name}`);
     return ctx;
   }
 
   current(): BrowserContext {
-    if (!this._currentName) throw new Error('No active context');
+    if (!this._currentName) throw new Error("No active context");
     return this.get(this._currentName);
   }
 
@@ -89,7 +94,7 @@ export class ContextManager {
 
     await ctx.close();
     this.contexts.delete(name);
-    logger.info('ContextManager', `Closed context: ${name}`);
+    logger.info("ContextManager", `Closed context: ${name}`);
 
     if (this._currentName === name) {
       const remaining = [...this.contexts.keys()];
@@ -100,7 +105,7 @@ export class ContextManager {
   async closeAll(): Promise<void> {
     for (const [name, ctx] of this.contexts) {
       await ctx.close();
-      logger.info('ContextManager', `Closed context: ${name}`);
+      logger.info("ContextManager", `Closed context: ${name}`);
     }
     this.contexts.clear();
     this._currentName = null;
