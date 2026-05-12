@@ -1,15 +1,20 @@
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
-import { join, extname, resolve, relative, sep } from 'node:path';
+import { join, extname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.jtl': 'text/plain; charset=utf-8',
   '.jmx': 'application/xml',
+  '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
 };
 
 /** Default HTTP port for the local report server (`PERF_REPORT_PORT` overrides). */
@@ -88,11 +93,17 @@ export function printPassedReportLink(reportDirAbsolute: string): void {
  * Serve the report directory on 127.0.0.1 (default port {@link DEFAULT_REPORT_SERVER_PORT}).
  * Opens the browser and blocks until SIGINT/SIGTERM.
  */
+/** True if resolved file path is inside root (root itself is not a downloadable file). */
+function isFileInsideRoot(rootAbs: string, candidateAbs: string): boolean {
+  const prefix = rootAbs.endsWith(sep) ? rootAbs : rootAbs + sep;
+  return candidateAbs === rootAbs || candidateAbs.startsWith(prefix);
+}
+
 export function serveReportBlocking(
   reportDirAbsolute: string,
   options?: { port?: number; headline?: string },
 ): Promise<void> {
-  const root = resolve(reportDirAbsolute);
+  const rootAbs = resolve(reportDirAbsolute);
   const port = options?.port ?? resolveReportServerPort();
   const headline = options?.headline ?? 'Serving HTML report (local)';
 
@@ -100,17 +111,34 @@ export function serveReportBlocking(
     const server = http.createServer(async (req, res) => {
       try {
         let pathname = req.url?.split('?')[0] || '/';
-        if (pathname === '/') pathname = '/index.html';
-        const decoded = decodeURIComponent(pathname);
-        const rel = decoded.replace(/^\/+/, '');
-        const filePath = resolve(root, rel);
-        const relToRoot = relative(root, filePath);
-        if (relToRoot.startsWith('..') || relToRoot === '') {
+        if (pathname === '/' || pathname === '') pathname = '/index.html';
+
+        let decoded: string;
+        try {
+          decoded = decodeURIComponent(pathname);
+        } catch {
+          res.writeHead(400).end('Bad request');
+          return;
+        }
+
+        const rel = decoded.replace(/^[/\\]+/, '').replace(/\\/g, '/');
+        const segments = rel.split('/').filter(Boolean);
+        if (segments.length === 0 || segments.some((s) => s === '..')) {
           res.writeHead(403).end('Forbidden');
           return;
         }
+
+        const filePath = resolve(rootAbs, rel);
+        if (!isFileInsideRoot(rootAbs, filePath)) {
+          res.writeHead(403).end('Forbidden');
+          return;
+        }
+
         const data = await readFile(filePath);
-        res.setHeader('Content-Type', MIME[extname(filePath)] || 'application/octet-stream');
+        const ext = extname(filePath).toLowerCase();
+        const type = MIME[ext] ?? 'application/octet-stream';
+        res.setHeader('Content-Type', type);
+        res.setHeader('Cache-Control', 'no-store');
         res.writeHead(200).end(data);
       } catch {
         res.writeHead(404).end('Not found');
