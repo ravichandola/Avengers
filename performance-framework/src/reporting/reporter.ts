@@ -1,5 +1,10 @@
 export interface Reporter {
-  onRunBegin?(payload: { runId: string; scenarioName: string }): Promise<void>;
+  onRunBegin?(payload: {
+    runId: string;
+    scenarioName: string;
+    scenarioId: string;
+    tags: string[];
+  }): Promise<void>;
   onScenarioBegin?(payload: { runId: string; scenarioId: string }): Promise<void>;
   onMetric?(payload: {
     label: string;

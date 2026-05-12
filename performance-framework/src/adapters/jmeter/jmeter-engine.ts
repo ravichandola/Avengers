@@ -63,7 +63,12 @@ export class JMeterEngine implements PerformanceEngine {
 
   async execute(model: ScenarioModel, context: RunContext): Promise<ExecutionSummary> {
     const bus = this.options.eventBus;
-    bus.emitTyped('run:begin', { runId: context.runId, scenarioName: model.name });
+    bus.emitTyped('run:begin', {
+      runId: context.runId,
+      scenarioName: model.name,
+      scenarioId: model.id,
+      tags: model.tags,
+    });
     bus.emitTyped('scenario:begin', { runId: context.runId, scenarioId: model.id });
 
     await this.compile(model, context);

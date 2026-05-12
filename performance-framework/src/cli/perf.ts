@@ -31,6 +31,7 @@ program
   .action(
     async (opts: { env: string; jmeterHome?: string; ci?: boolean }) => {
       const model = scenario('CLI smoke')
+        .tag('smoke', 'cli')
         .load({ users: 1, rampUp: '1s', duration: '5s' })
         .request(post('https://httpbin.org/post').body({ hello: 'perf' }).assertStatus(200))
         .build();

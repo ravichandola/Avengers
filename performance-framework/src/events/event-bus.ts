@@ -2,7 +2,7 @@ import { EventEmitter } from 'eventemitter3';
 import type { Assertion } from '../domain/load-profile.js';
 
 export type PerformanceEventMap = {
-  'run:begin': { runId: string; scenarioName: string };
+  'run:begin': { runId: string; scenarioName: string; scenarioId: string; tags: string[] };
   'run:end': { runId: string; passed: boolean; violations: string[] };
   'scenario:begin': { runId: string; scenarioId: string };
   'scenario:end': { runId: string; scenarioId: string };
