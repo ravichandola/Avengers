@@ -124,7 +124,7 @@ flowchart TD
 | Fixture | Browser | Desktop | Mobile | API | Notes |
 |---------|:-------:|:-------:|:------:|:---:|-------|
 | `app` | Yes | Yes | Yes | Yes* | *On API projects, `app` is `APIDriver`; otherwise use the `api` fixture for HTTP |
-| `pom` | Yes | Yes | Yes | Limited | `PomManager` — `PageObject` branch is browser-oriented |
+| `pom` | Yes | Yes | Yes | Limited | **`PomManager`** — **tabs only** (`newPage`, `browserTabs`, …). POMs: **`narrator.newPage`** |
 | `pages` | Yes | — | — | — | Separate `BrowserContext` — mostly auxiliary |
 | `api` | Yes | Yes | Yes | Yes | Dedicated HTTP client |
 | `auth` | Yes | Yes | Yes | Yes | Auth profile helpers |

@@ -30,7 +30,9 @@ import { PomManager } from '../pom/pom-manager';
 import { resolveConfig } from '../core/config';
 import { resolveBrowserLaunchUrl } from '../core/env-loader';
 import { logger } from '../utils/logger';
+import { disposalContext } from '../utils/disposal-context';
 import { NetworkMonitor } from '../drivers/browser/network/network-monitor';
+import { narrator } from '../drivers/browser/browser-narrator';
 
 export interface TestFixtures {
   app: IDriver;
@@ -40,7 +42,7 @@ export interface TestFixtures {
   checkpoint: CheckpointManager;
   /** Linear checkpointed steps — use {@link ResumableFlow.step} instead of building a `Step[]` for {@link runSteps}. */
   resumable: ResumableFlow;
-  /** Page-object factory + tab helpers for the current {@link IDriver} — see {@link PomManager}. */
+  /** Tab / navigation on the current browser `app`. Page objects: use **narrator.newPage** from **src/fixtures**. */
   pom: PomManager;
   network: NetworkMonitor;
 }
@@ -139,7 +141,13 @@ export const test = base.extend<TestFixtures>({
       }
     }
 
+    if (BROWSER_PLATFORMS.includes(platform) && tryUnwrapBrowserDriver(driver)) {
+      narrator.bind(driver);
+    }
+
     await use(driver);
+
+    narrator.unbind();
     await driver.close();
   },
 
@@ -261,6 +269,10 @@ export const test = base.extend<TestFixtures>({
   },
 });
 
+test.afterEach(async () => {
+  await disposalContext.disposeTestStack();
+});
+
 export {
   expect,
   runSteps,
@@ -274,7 +286,9 @@ export {
   resumeOptionsForDriver,
   tryUnwrapBrowserDriver,
   PomManager,
+  narrator,
   scopedCheckpointTestId,
+  disposalContext,
   type ResumableFlow,
   type CreateResumableFlowOptions,
   type RunStepsOptions,

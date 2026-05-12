@@ -1,4 +1,4 @@
-import { test, expect } from '../../src/fixtures';
+import { test, expect, narrator } from '../../src/fixtures';
 import { ShopCheckoutPage } from '../pom';
 
 /**
@@ -9,8 +9,8 @@ import { ShopCheckoutPage } from '../pom';
  * After a failure: `BROWSER_CHECKPOINT_RESUME=true npx playwright test resumable-checkout --project=chrome`
  */
 test.describe('Resumable Checkout Flow', () => {
-  test('multi-step checkout with auto-checkpoint', async ({ app, pom, resumable }) => {
-    const shop = pom.page(ShopCheckoutPage);
+  test('multi-step checkout with auto-checkpoint', async ({ app, resumable }) => {
+    const shop = narrator.newPage(ShopCheckoutPage);
 
     await resumable.step('browse products', async () => {
       await shop.browseProducts();

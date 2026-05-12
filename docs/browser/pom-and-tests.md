@@ -1,6 +1,6 @@
 # Browser POM and tests
 
-This guide explains how to **author page objects** for websites and **write browser tests** in this repo: file layout, the two POM bases (`DriverPage` vs `PageObject`), the **`pom`** fixture (`PomManager`), tabs, and checkpoints.
+This guide explains how to **author page objects** for websites and **write browser tests** in this repo: file layout, the two POM bases (`DriverPage` vs `PageObject`), the **`narrator`** POM factory, the **`pom`** tab helper, and checkpoints.
 
 **Shared fixture / `IDriver` concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Browser stack diagram:** [Architecture overview §13.1](../architecture/overview.md#131-browser-chromium--firefox--webkit).
 
@@ -9,10 +9,10 @@ This guide explains how to **author page objects** for websites and **write brow
 ## Test file and project
 
 - Name browser specs **`*.browser.spec.ts`** so `playwright.config.ts` picks them up for browser projects.
-- Import the test harness from **`src/fixtures`** (not `@playwright/test` directly) so you get **`app`**, **`pom`**, **`resumable`**, and shared **`expect`**:
+- Import the test harness from **`src/fixtures`** (not `@playwright/test` directly) so you get **`app`**, **`pom`**, **`narrator`**, **`resumable`**, and shared **`expect`**:
 
 ```typescript
-import { test, expect } from '../../src/fixtures';
+import { test, expect, narrator, pom } from '../../src/fixtures';
 ```
 
 Run a file, for example:
@@ -22,6 +22,28 @@ npx playwright test --project=chrome tests/browser/my-flow.browser.spec.ts
 ```
 
 ---
+
+## Hierarchy POMs (`pomPages`)
+
+For `RootContainer` → `WebPage` / `Block` / `Container` trees (underscore locators, `verifyLocator`, optional `EnhancedPageObject` typings), import the **`pomPages`** namespace so you do not clash with scoped **`Block`** (`page-object` helpers):
+
+```typescript
+import { pomPages } from '../../../src/drivers/browser/pom';
+
+class HomePage extends pomPages.WebPage {
+  constructor(page: import('playwright').Page) {
+    super(page);
+  }
+  protected baseUrl() {
+    return 'https://example.com';
+  }
+  async shouldBeVisible() {
+    return this;
+  }
+}
+```
+
+Utilities from the same import zip live under **`src/utils/`**: **`disposalContext`** + **`Server`** (test `afterEach` flushes test-scoped disposables when you use `test` from **`src/fixtures`**), **`createLocators(page)`**, and **`regexEscape`**.
 
 ## Two ways to model a page
 
@@ -88,14 +110,14 @@ export class MySitePage extends PageObject {
 In specs, prefer:
 
 ```typescript
-import { ShopCheckoutPage, PlaywrightSiteDriverPage, PomManager } from '../pom';
+import { ShopCheckoutPage, PlaywrightSiteDriverPage } from '../pom';
 ```
 
-Framework types also ship from **`src/pom`** (e.g. `DriverPage`, `PomManager`).
+Framework types also ship from **`src/pom`** (e.g. `DriverPage`, `PomManager` for typing the **`pom`** fixture).
 
 ---
 
-## Writing tests: `app`, `pom`, and assertions
+## Writing tests: `app`, `narrator`, `pom`, and assertions
 
 ### `app` fixture
 
@@ -114,33 +136,48 @@ test('example', async ({ app }) => {
 });
 ```
 
-### `pom` fixture (`PomManager`)
+### `narrator` — **the** POM factory (`newPage`)
 
-**`pom`** builds page objects against the **same** `app` driver. You avoid repeating `new MyPage(app)` everywhere.
+Import **`narrator`** from **`src/fixtures`** and build **every** page object with **`narrator.newPage(MyPom)`**. One API for **`DriverPage`** and **`PageObject`**: a **read-only lazy proxy** that instantiates on first property access or method call with the **current** tab (`PageObject`) or **`app`** (`DriverPage`). Writes to the proxy throw.
 
-- **`pom.page(DriverPageClass)`** — `new PageClass(this.driver)` (works with vision-wrapped drivers).
-- **`pom.page(PageObjectClass)`** — binds to the **active tab**: `new PageClass(browserDriver.pages.current())`.
+- **`narrator.page`** / **`narrator.pages()`** — active **`Page`** / **`PageManager`**.
+- **`narrator.newPage(Class, { args?: [...] })`** — optional extra constructor arguments after `page` / `driver`.
+- **`pom.newPage` / `pom.switchToTab` / …** refresh lazy POM caches automatically. With the standalone **`pages`** fixture, call **`narrator.resetPageInstances()`** after switching tabs.
 
-Tabs / context:
-
-- **`await pom.newPage(url?)`** — opens a new tab and makes it active (wraps `PageManager.openNewTab`).
-- **`await pom.newPagePom(PageObjectClass, url?)`** — new tab + `PageObject` instance in one step.
-- **`pom.browserTabs`** — full **`PageManager`**: `switchTo`, `switchToURL`, `switchToTitle`, `openNewTab`, etc.
-
-**Example:**
+**Requires** `test` from **`src/fixtures`**: **`app`** runs **`narrator.bind` / `unbind`** on browser projects.
 
 ```typescript
-test('flow', async ({ app, pom }) => {
+import { test, expect, narrator } from '../../src/fixtures';
+
+test('flow', async ({ app }) => {
   await app.launch({ url: 'https://playwright.dev/' });
-  const site = pom.page(PlaywrightSiteDriverPage);
-
+  const site = narrator.newPage(PlaywrightSiteDriverPage);
   await site.openDocsFromHeader();
-
-  await pom.newPage('https://playwright.dev/docs/pom');
-  const pomDoc = pom.page(PlaywrightDocsPage); // active tab
-  // …
 });
 ```
+
+### `pom` fixture (`PomManager`) — **tabs only**
+
+**`pom`** does **not** build POMs (there is no **`pom.page`**). It only changes tabs on the same **`app`**:
+
+- **`await pom.newPage(url?)`** — new active tab.
+- **`await pom.newPagePom(Class, url?)`** — new tab, then **`narrator.newPage(Class)`** (lazy POM).
+- **`pom.browserTabs`**, **`pom.switchToTab`**, **`switchToTabTitle`**, **`switchToTabURL`**
+
+```typescript
+import { test, expect, narrator, pom } from '../../src/fixtures';
+
+test('two tabs', async ({ app, pom }) => {
+  await app.launch({ url: 'https://playwright.dev/' });
+  const site = narrator.newPage(PlaywrightSiteDriverPage);
+  await site.openDocsFromHeader();
+  await pom.newPage('https://playwright.dev/docs/pom');
+  const pomDoc = narrator.newPage(PlaywrightDocsPage);
+  await expect(pomDoc.getTitle()).resolves.toMatch(/pom/i);
+});
+```
+
+No tracing/codegen proxy — lazy construction and frozen proxy only.
 
 ### When you need raw `Page` (e.g. `expect(page).toHaveURL`)
 
@@ -164,8 +201,10 @@ For long flows, use the **`resumable`** fixture so each **named step** can save 
 Linear style:
 
 ```typescript
-test('long flow', async ({ app, pom, resumable }) => {
-  const shop = pom.page(ShopCheckoutPage);
+import { test, expect, narrator } from '../../src/fixtures';
+
+test('long flow', async ({ app, resumable }) => {
+  const shop = narrator.newPage(ShopCheckoutPage);
   await app.launch(/* … */);
 
   await resumable.step('browse', async () => {
@@ -220,6 +259,6 @@ When using **`DriverPage`** / **`app`** with string selectors, resolution follow
 
 1. Add **`*.browser.spec.ts`** under `tests/browser/` (or your layout).
 2. Implement **`DriverPage`** or **`PageObject`** under `tests/pom/browser/` and export from **`tests/pom/index.ts`**.
-3. In the spec: **`test, expect`** from **`src/fixtures`**; use **`{ app, pom }`** (and **`resumable`** if you need checkpoints).
-4. Use **`pom.page(MyClass)`** instead of scattering `new MyClass(app)` / `new MyClass(pages.current())`.
-5. Use **`pom.newPage` / `pom.browserTabs`** for multi-tab flows tied to **`app`**.
+3. In the spec: **`test`, `expect`, `narrator`** from **`src/fixtures`**; add **`pom`** when you need tab helpers; add **`resumable`** for checkpoints.
+4. Build POMs **only** with **`narrator.newPage(MyClass)`** — not **`pom.page`** (removed). Avoid raw **`new MyClass(page)`** unless you use the isolated **`pages`** fixture.
+5. Use **`pom.newPage` / `pom.browserTabs`** or **`narrator.pages()`** for multi-tab flows on **`app`**. Keep the standalone **`pages`** fixture only when you need a **separate** browser context (see **`netflix.browser.spec.ts`**).

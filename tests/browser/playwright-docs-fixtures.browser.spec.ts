@@ -1,11 +1,11 @@
-import { test, expect } from '../../src/fixtures';
+import { test, expect, narrator } from '../../src/fixtures';
 import { PlaywrightSiteDriverPage } from '../pom';
 import { unwrapBrowserDriver } from '../helpers/unwrap-browser-driver';
 
 test.describe('Playwright.dev — fixtures doc, second tab, checkpoint steps', () => {
-  test('home → docs → fixtures → new tab POM (linear + resumable fixture)', async ({ app, pom, resumable }) => {
+  test('home → docs → fixtures → new tab POM (linear + resumable fixture)', async ({ app, resumable }) => {
     const browserDriver = unwrapBrowserDriver(app);
-    const site = pom.page(PlaywrightSiteDriverPage);
+    const site = narrator.newPage(PlaywrightSiteDriverPage);
 
     await app.launch({ url: 'https://playwright.dev/' });
 

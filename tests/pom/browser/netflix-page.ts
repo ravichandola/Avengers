@@ -1,5 +1,5 @@
 import { PageObject } from '../../../src/drivers/browser/pom/page-object';
-import { Page } from 'playwright';
+import { LlmJudge, EvalLabel } from '../../../src/eval';
 
 /** Auto-generated POM for https://www.netflix.com/in/ */
 export class NetflixPage extends PageObject {
@@ -63,5 +63,39 @@ export class NetflixPage extends PageObject {
   async fillForm(data: { r0?: string; r6?: string }): Promise<void> {
     if (data.r0 !== undefined) await this.r0.fill(data.r0);
     if (data.r6 !== undefined) await this.r6.fill(data.r6);
+  }
+
+  /** LLM rubric over current URL + title (used by eval / judge browser specs). */
+  async judgeLandingQuality(): Promise<{ passed: boolean; rationale: string }> {
+    const url = await this.getURL();
+    const title = await this.getTitle();
+    const candidate = JSON.stringify({ url, title });
+    const judge = new LlmJudge();
+    const outcome = await judge.evaluate({
+      criteria:
+        'PASS if this looks like a real Netflix entry or regional home page: URL should relate to netflix.com and title should be meaningful. FAIL if blank, error, or clearly wrong site.',
+      candidateOutput: candidate,
+      examples: [
+        {
+          input: '{"url":"https://www.netflix.com/in/","title":"Netflix"}',
+          result: { rationale: 'Netflix domain and title present.', label: EvalLabel.PASS },
+        },
+        {
+          input: '{"url":"about:blank","title":""}',
+          result: { rationale: 'No real page.', label: EvalLabel.FAIL },
+        },
+      ],
+    });
+
+    if ('data' in outcome) {
+      return {
+        passed: outcome.data.label === EvalLabel.PASS,
+        rationale: outcome.data.rationale,
+      };
+    }
+    if ('unavailable' in outcome) {
+      return { passed: false, rationale: outcome.unavailable };
+    }
+    return { passed: false, rationale: outcome.parseError };
   }
 }

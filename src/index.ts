@@ -25,6 +25,7 @@ export type { Platform, LaunchOptions, WaitOptions, ActionResult, UIElement, API
 
 export { BrowserDriver } from './drivers/browser/browser-driver';
 export { PageManager } from './drivers/browser/page-manager';
+export { narrator, BrowserNarrator } from './drivers/browser/browser-narrator';
 export { DesktopDriver } from './drivers/desktop/desktop-driver';
 export { MobileDriver } from './drivers/mobile/mobile-driver';
 export { APIDriver } from './drivers/api/api-driver';

@@ -1,7 +1,7 @@
-import { Page, BrowserContext } from 'playwright';
-import { PageObject } from './pom/page-object';
-import { DialogHandler } from './dialog-handler';
-import { logger } from '../../utils/logger';
+import { Page, BrowserContext } from "playwright";
+import { PageObject } from "./pom/page-object";
+import { DialogHandler } from "./dialog-handler";
+import { logger } from "../../utils/logger";
 
 /**
  * Tab/page lifecycle, POM factory, dialog handling.
@@ -35,7 +35,7 @@ export class PageManager {
       this.activePage = pages[pages.length - 1];
       this.attachDialogs(this.activePage);
     }
-    context.on('page', (page) => this.attachDialogs(page));
+    context.on("page", (page) => this.attachDialogs(page));
   }
 
   // ─── POM Factory ──────────────────────────────────────────
@@ -62,7 +62,7 @@ export class PageManager {
   current(): Page {
     if (!this.activePage) {
       const pages = this.context.pages();
-      if (pages.length === 0) throw new Error('No pages available');
+      if (pages.length === 0) throw new Error("No pages available");
       this.activePage = pages[pages.length - 1];
     }
     return this.activePage;
@@ -79,10 +79,15 @@ export class PageManager {
   switchTo(index: number): Page {
     const pages = this.context.pages();
     if (index < 0 || index >= pages.length) {
-      throw new Error(`Page index ${index} out of range (${pages.length} pages)`);
+      throw new Error(
+        `Page index ${index} out of range (${pages.length} pages)`,
+      );
     }
     this.activePage = pages[index];
-    logger.info('PageManager', `Switched to page ${index}: ${this.activePage.url()}`);
+    logger.info(
+      "PageManager",
+      `Switched to page ${index}: ${this.activePage.url()}`,
+    );
     return this.activePage;
   }
 
@@ -90,7 +95,7 @@ export class PageManager {
     for (const page of this.context.pages()) {
       if ((await page.title()).includes(title)) {
         this.activePage = page;
-        logger.info('PageManager', `Switched to page with title: ${title}`);
+        logger.info("PageManager", `Switched to page with title: ${title}`);
         return page;
       }
     }
@@ -101,10 +106,12 @@ export class PageManager {
     for (const page of this.context.pages()) {
       const url = page.url();
       const matches =
-        typeof urlPattern === 'string' ? url.includes(urlPattern) : urlPattern.test(url);
+        typeof urlPattern === "string"
+          ? url.includes(urlPattern)
+          : urlPattern.test(url);
       if (matches) {
         this.activePage = page;
-        logger.info('PageManager', `Switched to page with URL: ${url}`);
+        logger.info("PageManager", `Switched to page with URL: ${url}`);
         return page;
       }
     }
@@ -115,7 +122,7 @@ export class PageManager {
     const page = await this.context.newPage();
     if (url) await page.goto(url);
     this.activePage = page;
-    logger.info('PageManager', `Opened new tab${url ? `: ${url}` : ''}`);
+    logger.info("PageManager", `Opened new tab${url ? `: ${url}` : ""}`);
     return page;
   }
 
@@ -126,17 +133,18 @@ export class PageManager {
 
     await target.close();
     const remaining = this.context.pages();
-    this.activePage = remaining.length > 0 ? remaining[remaining.length - 1] : null;
-    logger.info('PageManager', `Closed tab, ${remaining.length} remaining`);
+    this.activePage =
+      remaining.length > 0 ? remaining[remaining.length - 1] : null;
+    logger.info("PageManager", `Closed tab, ${remaining.length} remaining`);
   }
 
   async waitForNewPage(action?: () => Promise<void>): Promise<Page> {
-    const pagePromise = this.context.waitForEvent('page');
+    const pagePromise = this.context.waitForEvent("page");
     if (action) await action();
     const newPage = await pagePromise;
     await newPage.waitForLoadState();
     this.activePage = newPage;
-    logger.info('PageManager', `New page opened: ${newPage.url()}`);
+    logger.info("PageManager", `New page opened: ${newPage.url()}`);
     return newPage;
   }
 
