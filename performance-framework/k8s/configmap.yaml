@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: perf-framework-config
+  namespace: performance
+data:
+  OTEL_SERVICE_NAME: "perf-framework"
+  PERF_ENV: "k8s"
+  LOG_LEVEL: "info"

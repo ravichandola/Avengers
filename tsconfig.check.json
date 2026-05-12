@@ -16,5 +16,6 @@
     }
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*", "mcp/**/*.ts", "playwright.config.ts"],
-  "exclude": ["node_modules", "dist", "playwright-report", "test-results", "_import-storyteller-pom"]
+  "exclude": ["node_modules", "dist", "playwright-report", "test-results", "_import-storyteller-pom"],
+  "references": [{ "path": "./performance-framework/tsconfig.json" }]
 }

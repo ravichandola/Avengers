@@ -1,0 +1,38 @@
+services:
+  perf-controller:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: enterprise-perf/controller:dev
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx2g"
+    command: ["run:smoke", "--env", "docker"]
+    volumes:
+      - perf-artifacts:/app/perf-output
+
+  jmeter-worker:
+    build:
+      context: ..
+      dockerfile: docker/jmeter-worker.Dockerfile
+    image: enterprise-perf/jmeter-worker:dev
+    # Docker Compose: use `docker compose up --scale jmeter-worker=N` for local fan-out experiments.
+
+  influxdb:
+    image: influxdb:2.7
+    profiles: ["observability"]
+    ports: ["8086:8086"]
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: changeme123
+      DOCKER_INFLUXDB_INIT_ORG: perf
+      DOCKER_INFLUXDB_INIT_BUCKET: metrics
+
+  grafana:
+    image: grafana/grafana:10.4.5
+    profiles: ["observability"]
+    ports: ["3000:3000"]
+    depends_on: [influxdb]
+
+volumes:
+  perf-artifacts:

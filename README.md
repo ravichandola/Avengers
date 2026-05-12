@@ -6,6 +6,8 @@ One API. One config. Any platform. Browser, Desktop, Mobile, API testing through
 
 For a **top-level map** of the repo — who calls whom, what each layer does, environment and LLM/vision behavior, and a **checklist to port the design** to another framework — see **[docs/architecture/overview.md](./docs/architecture/overview.md)** (**§13** = browser / desktop / mobile / API diagrams). The documentation index is **[docs/README.md](./docs/README.md)**. Concepts shared by every platform: **[docs/common/fixtures-and-idriver.md](./docs/common/fixtures-and-idriver.md)**.
 
+For **load and performance testing** (TypeScript DSL, JMeter, reports), see the **[performance-framework/performance-docs/beginner/](./performance-framework/performance-docs/beginner/)** track (concepts + hands-on), then **[performance-framework/performance-docs/](./performance-framework/performance-docs/)** for the full guides.
+
 ## Quick Start
 
 ```bash

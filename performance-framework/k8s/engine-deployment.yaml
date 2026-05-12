@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: perf-controller
+  namespace: performance
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: perf-controller
+  template:
+    metadata:
+      labels:
+        app: perf-controller
+    spec:
+      serviceAccountName: perf-controller
+      containers:
+        - name: controller
+          image: enterprise-perf/controller:latest
+          imagePullPolicy: IfNotPresent
+          args: ["run:smoke", "--env", "k8s"]
+          envFrom:
+            - configMapRef:
+                name: perf-framework-config
+            - secretRef:
+                name: perf-runtime-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"

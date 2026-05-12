@@ -1,0 +1,53 @@
+// Jenkins declarative pipeline — isolated from functional Playwright jobs.
+pipeline {
+  agent {
+    kubernetes {
+      yaml '''
+        apiVersion: v1
+        kind: Pod
+        spec:
+          containers:
+            - name: node
+              image: node:20-bookworm
+              command: ["sleep", "infinity"]
+            - name: jmeter
+              image: enterprise-perf/jmeter-worker:latest
+        '''
+    }
+  }
+  environment {
+    PERF_ROOT = 'performance-framework'
+  }
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+    stage('Install') {
+      steps {
+        dir("${PERF_ROOT}") {
+          sh 'npm ci'
+          sh 'npm run build'
+        }
+      }
+    }
+    stage('Performance') {
+      steps {
+        dir("${PERF_ROOT}") {
+          sh 'node dist/cli/perf.js run:smoke --env jenkins'
+        }
+      }
+    }
+    stage('Publish reports') {
+      steps {
+        publishHTML([
+          allowMissing: true,
+          alwaysLinkToLastBuild: true,
+          keepAll: true,
+          reportDir: "${PERF_ROOT}/perf-output",
+          reportFiles: '**/index.html',
+          reportName: 'Performance HTML'
+        ])
+      }
+    }
+  }
+}

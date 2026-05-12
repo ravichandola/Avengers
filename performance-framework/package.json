@@ -1,0 +1,45 @@
+{
+  "name": "enterprise-performance-framework",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Isolated enterprise performance testing framework (DSL → engine adapters → JMeter runtime). Independent from functional Playwright automation.",
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "perf-fw": "./dist/cli/perf.js"
+  },
+  "scripts": {
+    "build:report-client": "esbuild src/reporting/html-report/report-client.tsx --bundle --outfile=src/reporting/html-report/report.js --format=iife --platform=browser --jsx=automatic --legal-comments=none --minify --define:process.env.NODE_ENV=\\\"production\\\"",
+    "build": "npm run build:report-client && tsc -p tsconfig.json && node scripts/copy-html-report-assets.mjs",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.report-client.json --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "start:example": "node --import tsx ./examples/checkout.scenario.ts",
+    "example:jsonplaceholder": "node --import tsx ./examples/run-jsonplaceholder-load.ts",
+    "dev:smoke": "node --import tsx src/cli/perf.ts run:smoke",
+    "cli": "node --import tsx src/cli/perf.ts",
+    "prepare": "npm run build:report-client"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "commander": "^13.1.0",
+    "eventemitter3": "^5.0.1",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1",
+    "xmlbuilder2": "^3.1.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/node": "^20.14.0",
+    "chart.js": "^4.4.7",
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.5.0"
+  }
+}

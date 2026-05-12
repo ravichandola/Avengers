@@ -1,0 +1,56 @@
+# Copy to your org’s `.github/workflows/performance.yml` — lives outside the functional Playwright pipelines.
+name: Performance Gates
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  perf-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install JMeter
+        run: |
+          JMETER_VERSION=5.6.3
+          curl -fsSL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" | tar xz
+          echo "$PWD/apache-jmeter-${JMETER_VERSION}/bin" >> "$GITHUB_PATH"
+
+      - name: Install perf framework
+        working-directory: performance-framework
+        run: npm ci
+
+      - name: Build perf framework
+        working-directory: performance-framework
+        run: npm run build
+
+      - name: Run smoke scenario
+        working-directory: performance-framework
+        env:
+          JMETER_HOME: ${{ github.workspace }}/apache-jmeter-5.6.3
+        run: node dist/cli/perf.js run:smoke --env ci
+
+      - name: Upload HTML + JSON reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-reports
+          path: performance-framework/perf-output/**
+
+      - name: SLA gate (example)
+        working-directory: performance-framework
+        if: failure()
+        run: |
+          echo "Performance gate failed — block promotion / merge per policy."
+          exit 1
