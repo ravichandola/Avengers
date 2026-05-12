@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
   PerformanceEventBus,
@@ -9,11 +9,12 @@ import {
   AllureReporter,
   JMeterEngine,
   RunOrchestrator,
+  handlePerformanceReportCli,
 } from '../src/index.js';
 import { jsonPlaceholderLoadModel } from './jsonplaceholder-load.scenario.js';
 
 const runId = randomUUID();
-const wd = join(process.cwd(), 'perf-output', runId);
+const wd = resolve(process.cwd(), 'perf-output', runId);
 await mkdir(wd, { recursive: true });
 
 const bus = new PerformanceEventBus();
@@ -43,8 +44,8 @@ const summary = await orchestrator.run(jsonPlaceholderLoadModel, {
 
 console.log('Run directory:', wd);
 console.log('Summary:', JSON.stringify(summary, null, 2));
-console.log('Open HTML report:', join(wd, 'index.html'));
 
+await handlePerformanceReportCli(wd, summary.passed);
 if (!summary.passed) {
-  process.exitCode = 1;
+  process.exit(1);
 }

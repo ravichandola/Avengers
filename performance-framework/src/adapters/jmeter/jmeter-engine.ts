@@ -101,8 +101,14 @@ export class JMeterEngine implements PerformanceEngine {
         (v) => `[${label}] ${v}`,
       );
     });
+    const jmeterViolation =
+      exitCode !== 0
+        ? exitCode === 127 && log.trim()
+          ? log.trim()
+          : [`JMeter exit code ${exitCode}`, log.trim().slice(0, 800)].filter(Boolean).join(' — ')
+        : null;
     const violations = [
-      ...(exitCode !== 0 ? [`JMeter exit code ${exitCode}`] : []),
+      ...(jmeterViolation ? [jmeterViolation] : []),
       ...slaViolations,
       ...requestViolations,
     ];
@@ -113,8 +119,8 @@ export class JMeterEngine implements PerformanceEngine {
       bus.emitTyped('sla:violation', { runId: context.runId, rule: 'aggregate', detail: v });
     }
 
-    bus.emitTyped('scenario:end', { runId: context.runId, scenarioId: model.id });
-    bus.emitTyped('run:end', { runId: context.runId, passed, violations });
+    await bus.emitTypedAsync('scenario:end', { runId: context.runId, scenarioId: model.id });
+    await bus.emitTypedAsync('run:end', { runId: context.runId, passed, violations });
 
     return {
       runId: context.runId,

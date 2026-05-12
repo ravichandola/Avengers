@@ -233,39 +233,46 @@ jmeter -v
 echo "$JMETER_HOME" && ls "$JMETER_HOME/bin/jmeter"
 ```
 
-### 9.2 Every clone (or CI job)
+### 9.2 Install deps (and when you need `build`)
 
 ```bash
 cd performance-framework
 npm ci
-npm run build
 ```
 
-This compiles TypeScript to **`dist/`** (including **`dist/cli/perf.js`**).
+**Local development:** You do **not** need `npm run build` if you run scripts that use **`tsx`** (they load `src/` directly):
+
+- `npm run example:jsonplaceholder`
+- `npm run dev:smoke` (smoke test via source)
+- `npm run cli -- run:smoke --env local`
+
+**Run `npm run build`** when you want **`dist/`**: publishing, running `node dist/cli/perf.js`, or CI jobs that only execute compiled JavaScript.
 
 ### 9.3 Run the built-in smoke test
 
-Uses a tiny POST to httpbin; good for “is JMeter + wiring OK?”
+**From source (no build):**
 
 ```bash
-# If JMeter is not on PATH:
-export JMETER_HOME=/path/to/apache-jmeter-5.x.x
+export JMETER_HOME=/path/to/apache-jmeter-5.x.x   # if `jmeter` is not on PATH
+npm run dev:smoke -- --env local
+```
 
+**From compiled output** (after `npm run build`):
+
+```bash
 node dist/cli/perf.js run:smoke --env local
-# optional:
-# node dist/cli/perf.js run:smoke --jmeter-home "$JMETER_HOME"
 ```
 
 Exit code **0** = run passed SLAs/assertions; **non-zero** = failed gate.
 
 ### 9.4 Run the JSONPlaceholder example (beginner tutorial)
 
-Same as in the docs — exercises GET + POST + load profile:
-
 ```bash
 export JMETER_HOME=/path/to/apache-jmeter-5.x.x   # if needed
 npm run example:jsonplaceholder
 ```
+
+(No `build` required — uses `tsx`.)
 
 ### 9.5 Run your own runner (TypeScript, fast iteration)
 
@@ -273,7 +280,7 @@ npm run example:jsonplaceholder
 node --import tsx ./examples/run-my-load.ts
 ```
 
-After **`npm run build`**, you can run compiled JS instead of `tsx` if you compile your examples into `dist/` (optional setup).
+After **`npm run build`**, you can run compiled `.js` instead of `tsx` if you compile your examples into `dist/` (optional setup).
 
 ### 9.6 Where to look after a run
 
@@ -281,7 +288,7 @@ The script prints a line like **`Run directory: .../perf-output/<uuid>`**. In th
 
 | File / folder | Use |
 |---------------|-----|
-| **`index.html`** | Open in a browser — high-level pass/fail and violations. |
+| **`index.html`** | Full **HTML report** in the browser: scenario title, run metadata, pass/fail, summary cards (samples, error %, throughput, global p95/p99), **per-request table** (mean/min/max/percentiles, HTTP code counts), violations, and **recent samples** (detail rows). |
 | **`report.json`** | All metric samples + summary (good for CI or trends). |
 | **`results.jtl`** | Raw JMeter CSV — deep debugging. |
 | **`scenario.jmx`** | Generated plan — verify URLs and payloads. |

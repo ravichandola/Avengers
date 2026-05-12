@@ -63,10 +63,11 @@ Add an **`npm`** script in **`package.json`** (package root) if you want a short
 | Goal | Command |
 |------|--------|
 | Install framework deps | `cd performance-framework && npm ci` |
-| Compile TypeScript | `npm run build` |
+| Compile TypeScript | `npm run build` (only when you need `dist/`, e.g. CI or `node dist/cli/perf.js`) |
 | JMeter | `jmeter -v` **or** `export JMETER_HOME=/path/to/apache-jmeter-5.x.x` |
-| Built-in smoke (httpbin) | `node dist/cli/perf.js run:smoke` |
-| JSONPlaceholder example | `npm run example:jsonplaceholder` |
+| Built-in smoke **(no build)** | `npm run dev:smoke` — runs CLI from `src/` via `tsx` |
+| Built-in smoke **(compiled)** | `node dist/cli/perf.js run:smoke` (after `npm run build`) |
+| JSONPlaceholder example **(no build)** | `npm run example:jsonplaceholder` |
 | Your runner (TS, dev) | `node --import tsx ./examples/run-mine.ts` |
 
 After a run, open **`perf-output/<run-id>/index.html`** and **`report.json`** in that same folder.

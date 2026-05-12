@@ -9,6 +9,7 @@ export * from './reporting/reporter-orchestrator.js';
 export * from './reporting/json-reporter.js';
 export * from './reporting/html-reporter.js';
 export * from './reporting/allure-reporter.js';
+export * from './reporting/report-cli.js';
 export * from './adapters/jmeter/index.js';
 export * from './orchestration/run-orchestrator.js';
 export * from './plugins/plugin-host.js';

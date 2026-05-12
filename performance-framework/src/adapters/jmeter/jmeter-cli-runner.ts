@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { resolveJmeterExecutable } from './jmeter-resolve.js';
 
 export interface JMeterLaunchOptions {
   jmeterHome?: string;
@@ -9,20 +10,20 @@ export interface JMeterLaunchOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-function resolveJmeterCommand(opts: JMeterLaunchOptions): string {
-  if (opts.jmeterBin) return opts.jmeterBin;
-  if (opts.jmeterHome) {
-    const isWin = process.platform === 'win32';
-    return isWin ? `${opts.jmeterHome}/bin/jmeter.bat` : `${opts.jmeterHome}/bin/jmeter`;
-  }
-  return 'jmeter';
-}
-
 export async function runJmeterNonGui(opts: JMeterLaunchOptions): Promise<{ exitCode: number; log: string }> {
-  const cmd = resolveJmeterCommand(opts);
+  const mergedEnv = { ...process.env, ...opts.env };
+
+  let cmd: string;
+  try {
+    cmd = resolveJmeterExecutable(opts.jmeterHome, opts.jmeterBin, mergedEnv);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { exitCode: 127, log: msg };
+  }
+
   const args = ['-n', '-t', opts.jmxPath, '-l', opts.jtlPath];
   const child = spawn(cmd, args, {
-    env: { ...process.env, ...opts.env },
+    env: mergedEnv,
     shell: process.platform === 'win32',
   });
   const chunks: Buffer[] = [];

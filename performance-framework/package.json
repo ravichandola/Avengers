@@ -16,6 +16,7 @@
     "lint": "eslint . --max-warnings 0",
     "start:example": "node --import tsx ./examples/checkout.scenario.ts",
     "example:jsonplaceholder": "node --import tsx ./examples/run-jsonplaceholder-load.ts",
+    "dev:smoke": "node --import tsx src/cli/perf.ts run:smoke",
     "cli": "node --import tsx src/cli/perf.ts"
   },
   "engines": {

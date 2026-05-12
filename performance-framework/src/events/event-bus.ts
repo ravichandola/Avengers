@@ -39,6 +39,15 @@ export class PerformanceEventBus {
   emitTyped<K extends PerformanceEventName>(name: K, payload: PerformanceEventMap[K]): boolean {
     return this.bus.emit(name, payload);
   }
+
+  /** Await every listener (sync or Promise-returning). Use for terminal events so reporters finish I/O before the run returns. */
+  async emitTypedAsync<K extends PerformanceEventName>(
+    name: K,
+    payload: PerformanceEventMap[K],
+  ): Promise<void> {
+    const listeners = this.bus.listeners(name);
+    await Promise.all(listeners.map((fn) => Promise.resolve(fn(payload))));
+  }
 }
 
 export function evaluateAssertions(

@@ -76,7 +76,7 @@ node dist/cli/perf.js run:smoke --env local
 Typical files:
 
 - `report.json` — machine-readable summary (JSON reporter)
-- `index.html` (or similar) — HTML reporter output
+- `index.html` — HTML report: pass/fail, summary cards (samples, error %, throughput, global p95/p99), per-request latency table (mean/min/max/p50/p95/p99, HTTP code mix), violations, and a scrollable **recent samples** section
 - `allure-results/` — Allure-compatible files
 - `scenario.jmx` — generated plan
 - `results.jtl` — raw JMeter samples
