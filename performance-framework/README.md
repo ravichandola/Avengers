@@ -2,7 +2,7 @@
 
 TypeScript DSL and JMeter-backed runners for load and performance tests.
 
-**Documentation:** [`./performance-docs/`](./performance-docs/) — start with [**beginner/**](./performance-docs/beginner/) if you are new to performance testing; then QUICKSTART, WORKFLOW, ARCHITECTURE.
+**Documentation:** [`./performance-docs/`](./performance-docs/) — **Postman + OAuth2 + load test walkthrough (English + Hinglish):** [**FROM-POSTMAN-TO-LOAD-TEST.md**](./performance-docs/FROM-POSTMAN-TO-LOAD-TEST.md). Otherwise start with [**beginner/**](./performance-docs/beginner/) if you are new to performance testing; then QUICKSTART, WORKFLOW, ARCHITECTURE.
 
 ### Running tests without `npm run build`
 
