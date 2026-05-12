@@ -1,0 +1,21 @@
+# Merge into .gitlab-ci.yml as a separate job template, or include via `include:`.
+perf:smoke:
+  image: node:20-bookworm
+  stage: performance
+  variables:
+    JMETER_VERSION: "5.6.3"
+  before_script:
+    - apt-get update && apt-get install -y default-jre-headless curl
+    - curl -fsSL "https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${JMETER_VERSION}.tgz" | tar xz
+    - export PATH="$PWD/apache-jmeter-${JMETER_VERSION}/bin:$PATH"
+    - export JMETER_HOME="$PWD/apache-jmeter-${JMETER_VERSION}"
+    - cd performance-framework && npm ci && npm run build
+  script:
+    - cd performance-framework && node dist/cli/perf.js run:smoke --env gitlab-ci
+  artifacts:
+    when: always
+    paths:
+      - performance-framework/perf-output/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH

@@ -1,0 +1,19 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: perf-dashboard
+  namespace: performance
+  annotations:
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: perf.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: perf-dashboard
+                port:
+                  number: 80

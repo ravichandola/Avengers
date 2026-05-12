@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jmeter-worker
+  namespace: performance
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: jmeter-worker
+  template:
+    metadata:
+      labels:
+        app: jmeter-worker
+    spec:
+      containers:
+        - name: jmeter
+          image: enterprise-perf/jmeter-worker:latest
+          ports:
+            - containerPort: 1099
+              name: rmireg
+            - containerPort: 50000
+              name: local-port
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "4"
+              memory: "8Gi"
