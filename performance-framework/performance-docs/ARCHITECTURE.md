@@ -1,6 +1,8 @@
 # Enterprise Performance Framework — Architecture
 
-This document describes an **independently owned** performance testing platform that uses **Apache JMeter only as a low-level execution runtime**. The functional Playwright stack is **not** a dependency; optional integration happens through **shared contracts** (for example `contracts/auth-provider.ts`).
+> **Location:** This file lives in [`performance-docs/`](./). Framework package root is the parent directory ([`..`](../)).
+
+This document describes an **independently owned** performance testing platform that uses **Apache JMeter only as a low-level execution runtime**. The functional Playwright stack is **not** a dependency; optional integration happens through **shared contracts** (for example [`contracts/auth-provider.ts`](../contracts/auth-provider.ts)).
 
 ## 1. Isolation & ownership boundaries
 
@@ -21,6 +23,7 @@ This document describes an **independently owned** performance testing platform 
 
 ```
 performance-framework/
+├── performance-docs/          # Markdown guides (this folder)
 ├── contracts/                 # OPTIONAL cross-team interfaces (no Playwright)
 ├── src/
 │   ├── dsl/                   # Fluent TypeScript scenario API (public to perf engineers)

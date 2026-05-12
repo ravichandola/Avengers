@@ -4,7 +4,7 @@ import type { ExecutionSummary, PerformanceEngine, RunContext } from '../../engi
 import type { Assertion } from '../../domain/load-profile.js';
 import { PerformanceEventBus, evaluateAssertions } from '../../events/event-bus.js';
 import { buildJmx } from './jmx-generator.js';
-import { parseJtlCsv } from './jtl-parser.js';
+import { parseJtlCsv, type JtlSample } from './jtl-parser.js';
 import { readJtlFile, runJmeterNonGui } from './jmeter-cli-runner.js';
 
 export interface JMeterEngineOptions {
@@ -13,7 +13,7 @@ export interface JMeterEngineOptions {
   eventBus: PerformanceEventBus;
 }
 
-function collectAssertions(model: ScenarioModel): Assertion[] {
+function collectSlaAssertions(model: ScenarioModel): Assertion[] {
   const assertions: Assertion[] = [];
   for (const s of model.sla) {
     if (s.p95Ms != null) assertions.push({ kind: 'duration_p95', maxMs: s.p95Ms });
@@ -21,15 +21,32 @@ function collectAssertions(model: ScenarioModel): Assertion[] {
     if (s.maxErrorRatePercent != null)
       assertions.push({ kind: 'error_rate', maxPercent: s.maxErrorRatePercent });
   }
+  return assertions;
+}
+
+/** Per-request DSL assertions apply only to JTL rows with the same JMeter label (`request.name`). */
+function collectRequestScopedAssertions(
+  model: ScenarioModel,
+): Array<{ label: string; assertions: Assertion[] }> {
+  const out: Array<{ label: string; assertions: Assertion[] }> = [];
   function walk(steps: typeof model.steps): void {
     for (const step of steps) {
-      if (step.type === 'request') assertions.push(...step.request.assertions);
-      else if (step.type === 'parallel' || step.type === 'sequence') walk(step.steps);
+      if (step.type === 'request' && step.request.assertions.length > 0) {
+        out.push({ label: step.request.name, assertions: [...step.request.assertions] });
+      } else if (step.type === 'parallel' || step.type === 'sequence') walk(step.steps);
       else if (step.type === 'transaction') walk(step.steps);
     }
   }
   walk(model.steps);
-  return assertions;
+  return out;
+}
+
+function sampleMetrics(samples: JtlSample[]) {
+  return samples.map((s) => ({
+    elapsedMs: s.elapsedMs,
+    success: s.success,
+    responseCode: s.responseCode,
+  }));
 }
 
 /** JMeter is only the execution runtime — orchestration lives here and above. */
@@ -77,17 +94,17 @@ export class JMeterEngine implements PerformanceEngine {
       });
     }
 
-    const scenarioAssertions = collectAssertions(model);
+    const slaViolations = evaluateAssertions(collectSlaAssertions(model), sampleMetrics(samples));
+    const requestViolations = collectRequestScopedAssertions(model).flatMap(({ label, assertions }) => {
+      const forLabel = samples.filter((s) => s.label === label);
+      return evaluateAssertions(assertions, sampleMetrics(forLabel)).map(
+        (v) => `[${label}] ${v}`,
+      );
+    });
     const violations = [
       ...(exitCode !== 0 ? [`JMeter exit code ${exitCode}`] : []),
-      ...evaluateAssertions(
-        scenarioAssertions,
-        samples.map((s) => ({
-          elapsedMs: s.elapsedMs,
-          success: s.success,
-          responseCode: s.responseCode,
-        })),
-      ),
+      ...slaViolations,
+      ...requestViolations,
     ];
 
     const passed = violations.length === 0;

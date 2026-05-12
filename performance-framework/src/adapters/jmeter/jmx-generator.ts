@@ -143,15 +143,18 @@ export function buildJmx(scenario: ScenarioModel): string {
 
   const tgTree = planTree.ele('hashTree');
 
+  /* JMeter expects ThreadGroup → hashTree → (element, hashTree)* — not a leading nested hashTree. */
   for (const r of requests) {
-    const sampleTree = tgTree.ele('hashTree');
-    addHeaderManager(sampleTree, r);
-    if (Object.keys(r.headers).length > 0) sampleTree.ele('hashTree').up();
-    addThinkTimer(sampleTree, r);
-    if (r.thinkTime?.ms != null && r.thinkTime.ms > 0) sampleTree.ele('hashTree').up();
-    addHttpSampler(sampleTree, r);
-    sampleTree.ele('hashTree').up();
-    sampleTree.up();
+    if (Object.keys(r.headers).length > 0) {
+      addHeaderManager(tgTree, r);
+      tgTree.ele('hashTree').up();
+    }
+    if (r.thinkTime?.ms != null && r.thinkTime.ms > 0) {
+      addThinkTimer(tgTree, r);
+      tgTree.ele('hashTree').up();
+    }
+    addHttpSampler(tgTree, r);
+    tgTree.ele('hashTree').up();
   }
 
   tgTree.up();

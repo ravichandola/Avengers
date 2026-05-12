@@ -15,6 +15,7 @@
     "check": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint . --max-warnings 0",
     "start:example": "node --import tsx ./examples/checkout.scenario.ts",
+    "example:jsonplaceholder": "node --import tsx ./examples/run-jsonplaceholder-load.ts",
     "cli": "node --import tsx src/cli/perf.ts"
   },
   "engines": {

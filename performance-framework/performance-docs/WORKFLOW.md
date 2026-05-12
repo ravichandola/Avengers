@@ -1,6 +1,8 @@
 # Performance framework — full workflow guide
 
-This document is a **practical, end-to-end path** from zero to running load and performance tests with the `performance-framework` package. After setup, you can write TypeScript scenarios, execute them with **Apache JMeter** (the default engine), and collect **HTML, JSON, and Allure** artifacts. For design boundaries and module layout, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+> **Location:** This file lives in [`performance-docs/`](./). Run all commands from the package root ([`..`](../)) unless noted.
+
+This document is a **practical, end-to-end path** from zero to running load and performance tests with the `performance-framework` package. After setup, you can write TypeScript scenarios, execute them with **Apache JMeter** (the default engine), and collect **HTML, JSON, and Allure** artifacts. **New to performance testing?** Read [Performance testing for engineers](./beginner/performance-testing-for-engineers.md) first. For design boundaries and module layout, see [ARCHITECTURE.md](./ARCHITECTURE.md). For a **short summary** (first/second/third, scripting, commands), see [QUICKSTART.md](./QUICKSTART.md).
 
 ---
 
@@ -11,9 +13,9 @@ This document is a **practical, end-to-end path** from zero to running load and 
 | **Scenario** | TypeScript using the DSL (`scenario`, `get` / `post`, `load`, `slaRule`, …) |
 | **Execution** | Framework compiles to `.jmx`, runs `jmeter -n`, parses `.jtl`, evaluates SLAs |
 | **Outputs** | Under `perf-output/<run-id>/` (reports, JMX, JTL) |
-| **Automation** | Optional: GitHub Actions / Jenkins / GitLab templates in `ci/`, Docker in `docker/`, samples in `k8s/` |
+| **Automation** | Optional: GitHub Actions / Jenkins / GitLab templates in [`ci/`](../ci/), Docker in [`docker/`](../docker/), samples in [`k8s/`](../k8s/) |
 
-The functional Playwright stack is **not** required. Optional shared auth shapes live in `contracts/`.
+The functional Playwright stack is **not** required. Optional shared auth shapes live in [`contracts/`](../contracts/).
 
 ---
 
@@ -130,7 +132,7 @@ const model = scenario('My API load test')
   })
 ```
 
-Supported **`kind`** values (see `src/domain/load-profile.ts`):  
+Supported **`kind`** values (see [`src/domain/load-profile.ts`](../src/domain/load-profile.ts)):  
 `constant`, `ramp_up`, `ramp_down`, `spike`, `stress`, `step`, `burst`, `soak`, `breakpoint`, `volume`.
 
 **Duration strings:** suffix with `s`, `m`, or `h` (e.g. `30s`, `5m`, `1h`).
@@ -217,7 +219,7 @@ SLA rules contribute to the same assertion pipeline as per-request assertions. F
   .build();
 ```
 
-`build()` returns a **`ScenarioModel`** (JSON-serializable AST). You can **`JSON.stringify`** it for inspection, caching, or future worker shipping — see `examples/checkout.scenario.ts` which logs the model (`npm run start:example` only prints AST; it does **not** run JMeter unless you add a runner — see section 7).
+`build()` returns a **`ScenarioModel`** (JSON-serializable AST). You can **`JSON.stringify`** it for inspection, caching, or future worker shipping — see [`examples/checkout.scenario.ts`](../examples/checkout.scenario.ts) which logs the model (`npm run start:example` only prints AST; it does **not** run JMeter unless you add a runner — see section 7).
 
 ---
 
@@ -287,12 +289,12 @@ After **`npm run build`**, you can point `node` at compiled `.js` instead of `ts
 
 ### Step 7.2 — Environment and secrets
 
-- Pass tokens via **`process.env`** and build headers in TypeScript (**`.bearerToken(process.env.API_TOKEN!)`**), or implement an **`AuthProvider`** (see `contracts/auth-provider.ts`) in your runner before constructing requests.
+- Pass tokens via **`process.env`** and build headers in TypeScript (**`.bearerToken(process.env.API_TOKEN!)`**), or implement an **`AuthProvider`** (see [`contracts/auth-provider.ts`](../contracts/auth-provider.ts)) in your runner before constructing requests.
 - **Do not** commit secrets; use CI secret stores and `env:` in workflows.
 
 ### Step 7.3 — Pass/fail policy
 
-Treat **`summary.passed`** and **`summary.violations`** as the **performance gate**. In CI, fail the job when the process exits non-zero (same pattern as `ci/github-actions.example.yml`).
+Treat **`summary.passed`** and **`summary.violations`** as the **performance gate**. In CI, fail the job when the process exits non-zero (same pattern as [`ci/github-actions.example.yml`](../ci/github-actions.example.yml)).
 
 ---
 
@@ -317,9 +319,9 @@ Templates are **examples** — copy into your org’s repo and adjust paths.
 
 | Platform | File |
 |----------|------|
-| GitHub Actions | `ci/github-actions.example.yml` |
-| Jenkins | `ci/Jenkinsfile` |
-| GitLab CI | `ci/gitlab-ci.example.yml` |
+| GitHub Actions | [`github-actions.example.yml`](../ci/github-actions.example.yml) |
+| Jenkins | [`Jenkinsfile`](../ci/Jenkinsfile) |
+| GitLab CI | [`gitlab-ci.example.yml`](../ci/gitlab-ci.example.yml) |
 
 Typical stages: checkout → setup Node + Java → install JMeter → `npm ci` → `npm run build` → `node dist/cli/perf.js run:smoke` (or your custom runner) → upload `perf-output/**` → optional SLA gate step.
 
@@ -329,17 +331,17 @@ Keep **performance** workflows **separate** from functional Playwright pipelines
 
 ## 10. Docker and Kubernetes (optional)
 
-- **`docker/docker-compose.yml`** — controller image + scalable **jmeter-worker** (local fan-out experiments); optional **InfluxDB + Grafana** profile for observability spikes.
-- **`docker/Dockerfile`** / **`jmeter-worker.Dockerfile`** — build context is the **parent** of `docker/` (see compose `context: ..`).
-- **`k8s/`** — sample namespace, deployments, HPA, ingress, secrets; treat as **starting points**, not production-ready without your policies (network policy, PDBs, quotas — described in ARCHITECTURE).
+- **[`docker/docker-compose.yml`](../docker/docker-compose.yml)** — controller image + scalable **jmeter-worker** (local fan-out experiments); optional **InfluxDB + Grafana** profile for observability spikes.
+- **[`docker/Dockerfile`](../docker/Dockerfile)** / **[`jmeter-worker.Dockerfile`](../docker/jmeter-worker.Dockerfile)** — build context is the **parent** of `docker/` (see compose `context: ..`).
+- **[`k8s/`](../k8s/)** — sample namespace, deployments, HPA, ingress, secrets; treat as **starting points**, not production-ready without your policies (network policy, PDBs, quotas — described in ARCHITECTURE).
 
 ---
 
 ## 11. Live dashboard (optional)
 
-The **`dashboard/`** package is a **separate** Vite + React app. The framework can expose realtime events via **`attachDashboardBridge`** (`src/realtime/dashboard-bridge.ts`) on the event bus. For day-one load testing you can ignore it; add it when you need live charts during a long run.
+The **[`dashboard/`](../dashboard/)** package is a **separate** Vite + React app. The framework can expose realtime events via **`attachDashboardBridge`** ([`src/realtime/dashboard-bridge.ts`](../src/realtime/dashboard-bridge.ts)) on the event bus. For day-one load testing you can ignore it; add it when you need live charts during a long run.
 
-```base
+```bash
 cd dashboard
 npm ci
 npm run dev
@@ -352,7 +354,7 @@ Wire-up details depend on your deployment; see [ARCHITECTURE.md](./ARCHITECTURE.
 ## 12. Checklist — “I’m ready to work”
 
 - [ ] Node 20+, Java, JMeter installed or available in CI image  
-- [ ] `npm ci && npm run build` succeeds in `performance-framework/`  
+- [ ] `npm ci && npm run build` succeeds at the package root  
 - [ ] `node dist/cli/perf.js run:smoke` passes locally  
 - [ ] You have a **scenario file** using `scenario` + `load` + requests + optional `slaRule`  
 - [ ] You have a **runner script** (or CI job) that wires `RunOrchestrator` + `JMeterEngine` + reporters  
@@ -363,7 +365,7 @@ Wire-up details depend on your deployment; see [ARCHITECTURE.md](./ARCHITECTURE.
 ## 13. Where to go next
 
 - **Deep design:** [ARCHITECTURE.md](./ARCHITECTURE.md) — hexagonal layout, event bus, plugins, observability.  
-- **Example AST:** [examples/checkout.scenario.ts](./examples/checkout.scenario.ts)  
+- **Example AST:** [`examples/checkout.scenario.ts`](../examples/checkout.scenario.ts)  
 - **Extending engines:** implement **`PerformanceEngine`** and register it in your composition root instead of `JMeterEngine`.  
 - **Custom reporters:** implement **`Reporter`** and add instances to **`ReporterOrchestrator`**.
 
