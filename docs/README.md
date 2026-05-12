@@ -89,14 +89,40 @@ Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **brows
 
 ---
 
+## 8. Load & performance (`performance-framework/`)
+
+This repo includes a **separate npm package** for **load and stress tests**, not Playwright **`*.spec.ts`** files.
+
+| Doc | What you will learn |
+|-----|---------------------|
+| [**Package README**](../performance-framework/README.md) | Commands without `npm run build`, JMeter setup, report server vs CI env vars |
+| [**Documentation index**](../performance-framework/performance-docs/README.md) | Table of QUICKSTART, WORKFLOW, ARCHITECTURE, Postman guide |
+| [**Beginner track**](../performance-framework/performance-docs/beginner/README.md) | Performance concepts & how they map to `scenario()` / runners |
+| [**QUICKSTART**](../performance-framework/performance-docs/QUICKSTART.md) | Scenario + runner two-file pattern and first commands |
+| [**WORKFLOW**](../performance-framework/performance-docs/WORKFLOW.md) | Full workflow and operations |
+| [**ARCHITECTURE**](../performance-framework/performance-docs/ARCHITECTURE.md) | DSL → engine → adapters design |
+| [**From Postman to load test**](../performance-framework/performance-docs/FROM-POSTMAN-TO-LOAD-TEST.md) | Postman + OAuth mindset → DSL, diagrams, JSONPlaceholder steps |
+
+Typical CLI from **`performance-framework/`**:
+
+```bash
+cd performance-framework
+npm ci
+npm run example:jsonplaceholder       # writes perf-output/<run-id>/ (JMeter must be reachable)
+npm run dev:smoke                     # CLI smoke from TypeScript sources
+```
+
+---
+
 ## Suggested reading order
 
 1. [First test & setup](./configuration/first-test-and-setup.md)  
 2. [Fixtures & `IDriver`](./common/fixtures-and-idriver.md)  
 3. [Architecture overview](./architecture/overview.md) — at least sections 1–5 and your platform’s §13  
 4. Your platform hub: [Browser](./browser/README.md), [Desktop](./desktop/README.md), [Mobile](./mobile/README.md), or [API](./api/README.md)  
-5. [Using checkpoints in tests](./common/checkpoints-in-tests.md) for save-and-resume basics, then [Auth & checkpoints](./common/auth-and-checkpoints.md) for sessions and advanced resume options  
-6. [Eval](./common/eval-framework.md) / [LLM providers](./common/llm-providers.md) when you use judges or vision-related config  
+5. [Load & performance package](../performance-framework/performance-docs/README.md) when you need JMeter-based load tests and **`perf-output/`** (distinct from functional Playwright API **`api`** specs)  
+6. [Using checkpoints in tests](./common/checkpoints-in-tests.md) for save-and-resume basics, then [Auth & checkpoints](./common/auth-and-checkpoints.md) for sessions and advanced resume options  
+7. [Eval](./common/eval-framework.md) / [LLM providers](./common/llm-providers.md) when you use judges or vision-related config  
 
 ---
 
@@ -111,8 +137,10 @@ npm run test:chrome       # browser — Chrome
 npm run test:desktop      # desktop-macos
 npm run test:mobile       # mobile-ios
 npm run test:api          # api project
-npm run build             # TypeScript compile
+npm run build             # TypeScript compile (Playwright workspace root)
 npm run pom:gen           # POM generator CLI
+
+cd performance-framework && npm install && npm run example:jsonplaceholder   # load test demo (Apache JMeter)
 ```
 
 ---
@@ -126,7 +154,7 @@ npm run pom:gen           # POM generator CLI
 | `*.mobile.spec.ts` | `mobile-ios`, `mobile-android` |
 | `*.api.spec.ts` | `api` |
 
-Tests live under `tests/` (see `playwright.config.ts` → `testDir`).
+Playwright functional tests live under `tests/` (see `playwright.config.ts` → `testDir`). **Load DSL** files live under **`performance-framework/examples/`** (`*.scenario.ts`, `run-*.ts`): separate package and toolchain — see **§ Load & performance** above.
 
 ---
 
@@ -136,5 +164,6 @@ Tests live under `tests/` (see `playwright.config.ts` → `testDir`).
 - **Driver contract:** `src/core/base-driver.ts`  
 - **Playwright config:** `playwright.config.ts`  
 - **Env loading:** `src/core/env-loader.ts`  
+- **Performance / load DSL + JMeter + reports:** [`performance-framework/`](../performance-framework/README.md)
 
 If something fails, open the **platform guide** for prerequisites (Appium, Accessibility permissions, etc.).
