@@ -5,6 +5,11 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{ts,tsx,mjs,cjs,yml,yaml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,mjs,cjs,yml,yaml,md}\"",
+    "check": "tsc --noEmit -p tsconfig.check.json",
     "build": "tsc",
     "dev": "ts-node src/index.ts",
     "test": "npx playwright test",
@@ -42,9 +47,15 @@
     "webdriverio": "^9.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.44.0",
     "@types/node": "^20.14.0",
+    "eslint": "^10.3.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "typescript-eslint": "^8.59.3"
   }
 }

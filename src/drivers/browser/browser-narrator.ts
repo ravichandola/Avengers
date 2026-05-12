@@ -6,6 +6,8 @@ import { DriverPage } from '../../pom/driver-page';
 import type { BrowserDriver } from './browser-driver';
 import { createLazyReadonlyPom } from './lazy-readonly-pom';
 import type { PageManager } from './page-manager';
+import { Block as HierarchyPomBlock } from './pom/pages/block';
+import { WebPage } from './pom/pages/web-page';
 import { PageObject } from './pom/page-object';
 
 /**
@@ -74,8 +76,11 @@ export class BrowserNarrator {
    * Lazy readonly POM — first access instantiates with current {@link page} (or {@link DriverPage}: current `app`).
    * After tab switches, call {@link resetPageInstances} so the next access uses the new tab
    * (handled for you when switching via {@link PomManager}).
+   *
+   * Page-bound constructors: {@link PageObject}, {@link WebPage}, or hierarchy {@link HierarchyPomBlock}
+   * (`pomPages.Block` — not the scoped `Block` from `page-object`).
    */
-  newPage<T extends PageObject>(
+  newPage<T extends PageObject | WebPage | HierarchyPomBlock>(
     ctor: new (page: Page, ...args: unknown[]) => T,
     options?: { args?: unknown[] },
   ): Readonly<T>;
@@ -85,7 +90,7 @@ export class BrowserNarrator {
     options?: { args?: unknown[] },
   ): Readonly<T>;
 
-  newPage<T extends PageObject | DriverPage>(
+  newPage<T extends PageObject | WebPage | HierarchyPomBlock | DriverPage>(
     ctor: new (pageOrDriver: Page | IDriver, ...args: unknown[]) => T,
     options?: { args?: unknown[] },
   ): Readonly<T> {
@@ -95,7 +100,11 @@ export class BrowserNarrator {
 
     const extraArgs = options?.args ?? [];
 
-    if (PageObject.prototype.isPrototypeOf(ctor.prototype)) {
+    if (
+      PageObject.prototype.isPrototypeOf(ctor.prototype) ||
+      WebPage.prototype.isPrototypeOf(ctor.prototype) ||
+      HierarchyPomBlock.prototype.isPrototypeOf(ctor.prototype)
+    ) {
       return createLazyReadonlyPom({
         kind: 'pageobject',
         ctor: ctor as new (page: Page, ...args: unknown[]) => T,
@@ -116,7 +125,7 @@ export class BrowserNarrator {
     }
 
     throw new Error(
-      `narrator.newPage: ${(ctor as { name?: string }).name ?? 'Class'} must extend PageObject or DriverPage`,
+      `narrator.newPage: ${(ctor as { name?: string }).name ?? 'Class'} must extend PageObject, WebPage, pomPages.Block, or DriverPage`,
     );
   }
 

@@ -34,7 +34,7 @@ test.describe('Eval Pipeline — Browser Landing Page', () => {
 
   // ─── 1. Rule-based eval ─────────────────────────────────────────────
 
-  test('rule-based: validates URL domain and title are present', async ({ app }) => {
+  test('rule-based: validates URL domain and title are present', async ({ app: _app }) => {
     const netflix = narrator.newPage(NetflixPage);
     await netflix.open();
 
@@ -54,7 +54,7 @@ test.describe('Eval Pipeline — Browser Landing Page', () => {
 
   // ─── 2. LLM judge single verdict ───────────────────────────────────
 
-  test('llm judge: validates landing page quality (PASS/FAIL)', async ({ app }) => {
+  test('llm judge: validates landing page quality (PASS/FAIL)', async ({ app: _app }) => {
     test.skip(
       !process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY,
       'LLM judge key not configured',

@@ -12,7 +12,7 @@ export {
   type LlmConfig,
 } from './types';
 
-export { LlmJudge, type JudgeOutcome } from './judge';
+export { LlmJudge, type JudgeOutcome, type JudgeJsonOutcome } from './judge';
 export { EvalRunner } from './eval-runner';
 
 export {

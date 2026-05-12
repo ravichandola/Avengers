@@ -2,7 +2,7 @@ import { test, expect, narrator } from '../../src/fixtures';
 import { NetflixPage, NetflixBrowsePage } from '../pom';
 
 test.describe('Netflix - Browser Automation', () => {
-  test('navigates to netflix.com and verifies page loaded', async ({ app }) => {
+  test('navigates to netflix.com and verifies page loaded', async ({ app: _app }) => {
     const netflix = narrator.newPage(NetflixPage);
     await netflix.open();
 
@@ -17,7 +17,7 @@ test.describe('Netflix - Browser Automation', () => {
     const page1 = pages.current();
     await page1.goto(NetflixPage.entryUrl);
 
-    const page2 = await pages.openNewTab(NetflixBrowsePage.browseUrl);
+    const _page2 = await pages.openNewTab(NetflixBrowsePage.browseUrl);
     expect(pages.count()).toBe(2);
 
     pages.switchTo(0);
@@ -27,7 +27,7 @@ test.describe('Netflix - Browser Automation', () => {
     expect(pages.count()).toBe(1);
   });
 
-  test('llm judge: validates landing page quality (PASS/FAIL JSON)', async ({ app }) => {
+  test('llm judge: validates landing page quality (PASS/FAIL JSON)', async ({ app: _app }) => {
     test.skip(!process.env.OPENAI_API_KEY && !process.env.GEMINI_API_KEY, 'LLM judge key not configured');
 
     const netflix = narrator.newPage(NetflixPage);

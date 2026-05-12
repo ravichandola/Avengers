@@ -1,4 +1,4 @@
-import { LaunchOptions, WaitOptions, ActionResult, UIElement } from './types';
+import { LaunchOptions, WaitOptions, UIElement } from './types';
 
 export interface IDriver {
   readonly platform: string;

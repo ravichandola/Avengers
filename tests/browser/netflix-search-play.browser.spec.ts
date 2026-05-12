@@ -14,7 +14,10 @@ import { NetflixBrowsePage } from '../pom';
 test.describe('Netflix - Search Dhurandhar & Play with Network Trace', () => {
   test.setTimeout(120_000);
 
-  test('search for Dhurandhar, play the movie, and capture all network calls @network', async ({ app, network }) => {
+  test('search for Dhurandhar, play the movie, and capture all network calls @network', async ({
+    app: _app,
+    network,
+  }) => {
     const netflix = narrator.newPage(NetflixBrowsePage);
     const page = narrator.page;
 
@@ -141,7 +144,10 @@ test.describe('Netflix - Search Dhurandhar & Play with Network Trace', () => {
     await netflix.goBackToBrowse();
   });
 
-  test('search for Dhurandhar and verify API call count @network', async ({ app, network }) => {
+  test('search for Dhurandhar and verify API call count @network', async ({
+    app: _app,
+    network,
+  }) => {
     const netflix = narrator.newPage(NetflixBrowsePage);
     const page = narrator.page;
 

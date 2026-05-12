@@ -19,18 +19,22 @@ import {
   EvalLabel,
   EvalResult,
   JudgeRequest,
-  JudgeFewShotExample,
   LlmConfig,
 } from './types';
 import {
   LlmProvider,
   resolveProvider,
   resolveProviderConfig,
-  ResolveProviderOpts,
 } from './llm-provider';
 
 export type JudgeOutcome =
   | { data: EvalResult; raw: string }
+  | { unavailable: string }
+  | { parseError: string; raw: string };
+
+/** LLM replies with arbitrary JSON — use with {@link LlmJudge.completeJson} / {@link DriverPage.judgeJson}. */
+export type JudgeJsonOutcome<T = unknown> =
+  | { data: T; raw: string }
   | { unavailable: string }
   | { parseError: string; raw: string };
 
@@ -69,6 +73,35 @@ export class LlmJudge {
         maxTokens: request.maxTokens ?? 280,
       });
       return LlmJudge.parseResponse(raw);
+    } catch (err) {
+      return { unavailable: `LLM judge unavailable: ${err instanceof Error ? err.message : err}` };
+    }
+  }
+
+  /** Model returns a plain JSON object (any shape — not PASS/FAIL rubric). */
+  async completeJson<T = unknown>(
+    opts: {
+      prompt: string;
+      systemInstruction?: string;
+      temperature?: number;
+      maxTokens?: number;
+    },
+  ): Promise<JudgeJsonOutcome<T>> {
+    if (!this.config.apiKey) {
+      return { unavailable: 'No LLM API key configured for selected provider' };
+    }
+
+    const systemInstruction =
+      opts.systemInstruction ??
+      'Reply with ONLY a single JSON object. No markdown fences, no prose outside that object.';
+
+    try {
+      const provider = this.getProvider();
+      const raw = await provider.complete(systemInstruction, opts.prompt, {
+        temperature: opts.temperature ?? 0,
+        maxTokens: opts.maxTokens ?? 280,
+      });
+      return LlmJudge.parseJsonObject<T>(raw);
     } catch (err) {
       return { unavailable: `LLM judge unavailable: ${err instanceof Error ? err.message : err}` };
     }
@@ -128,6 +161,50 @@ export class LlmJudge {
     parts.push('}');
 
     return parts.join('\n');
+  }
+
+  static parseJsonObject<T>(raw: string): JudgeJsonOutcome<T> {
+    const text = raw.replace(/^\s*```(?:json)?\s*\n?/i, '').replace(/\n?```\s*$/im, '').trim();
+
+    const tryParse = (s: string): T | undefined => {
+      try {
+        return JSON.parse(s) as T;
+      } catch {
+        return undefined;
+      }
+    };
+
+    const direct = tryParse(text);
+    if (direct !== undefined) {
+      return { data: direct, raw };
+    }
+
+    const slice = LlmJudge.extractBalancedBraceObject(text);
+    if (slice === null) {
+      return { parseError: 'No JSON object found in model response', raw };
+    }
+
+    const parsed = tryParse(slice);
+    if (parsed !== undefined) {
+      return { data: parsed, raw };
+    }
+
+    return { parseError: 'Failed to parse JSON in model response', raw };
+  }
+
+  static extractBalancedBraceObject(source: string): string | null {
+    const start = source.indexOf('{');
+    if (start < 0) return null;
+    let depth = 0;
+    for (let i = start; i < source.length; i++) {
+      const ch = source[i];
+      if (ch === '{') depth += 1;
+      else if (ch === '}') {
+        depth -= 1;
+        if (depth === 0) return source.slice(start, i + 1);
+      }
+    }
+    return null;
   }
 
   static parseResponse(raw: string): JudgeOutcome {

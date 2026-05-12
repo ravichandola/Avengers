@@ -109,7 +109,7 @@ When you want **native Playwright `Locator`** fields instead of `IDriver` + `ele
 
 ```typescript
 import { test, expect } from '../../src/fixtures';
-import { NetflixBrowsePage } from '../pom/browser/netflix-browse-page';
+import { NetflixBrowsePage } from '../pom';
 
 test('browse with PageObject', async ({ pages }) => {
   const netflix = new NetflixBrowsePage(pages.current());

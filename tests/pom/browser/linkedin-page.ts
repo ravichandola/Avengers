@@ -1,5 +1,4 @@
 import { PageObject } from '../../../src/drivers/browser/pom/page-object';
-import { Page } from 'playwright';
 
 /** Auto-generated POM for https://www.linkedin.com/ */
 export class LinkedinPage extends PageObject {
