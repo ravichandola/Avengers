@@ -6,7 +6,64 @@ One API. One config. Any platform. Browser, Desktop, Mobile, API testing through
 
 For a **top-level map** of the repo — who calls whom, what each layer does, environment and LLM/vision behavior, and a **checklist to port the design** to another framework — see **[docs/architecture/overview.md](./docs/architecture/overview.md)** (**§13** = browser / desktop / mobile / API diagrams). The documentation index is **[docs/README.md](./docs/README.md)**. Concepts shared by every platform: **[docs/common/fixtures-and-idriver.md](./docs/common/fixtures-and-idriver.md)**.
 
-For **load and performance testing** (TypeScript DSL, JMeter, reports), see the **[performance-framework/performance-docs/beginner/](./performance-framework/performance-docs/beginner/)** track (concepts + hands-on), then **[performance-framework/performance-docs/](./performance-framework/performance-docs/)** for the full guides.
+For **browser / desktop / mobile / functional API** flows, documentation lives under **[docs/](./docs/)** (**[docs/README.md](./docs/README.md)**).
+
+---
+
+## Load & performance testing (`performance-framework/`)
+
+Performance work lives in **its own npm package**, isolated from Playwright **`*.spec.ts`** tests (see [*Performance testing for engineers* §8](./performance-framework/performance-docs/beginner/performance-testing-for-engineers.md)): you describe load in TypeScript (**`scenario()`**, **`get` / `post`**, **`load()`**, SLA and assertions); the tooling turns that into **Apache JMeter** (`.jmx`), runs workers, parses **`.jtl`**, and writes **HTML + JSON + Allure-compatible** artifacts per run under **`performance-framework/perf-output/<run-id>/`**.
+
+### Prerequisites
+
+| Need | Purpose |
+|------|---------|
+| **Node.js ≥ 20** | Required by `"engines"` on the package (`npm install`). |
+| **Apache JMeter** | Execute generated plans (`jmeter -v`), or resolve via **`JMETER_HOME`** / **`APACHE_JMETER_HOME`** / **Homebrew macOS**: `JMETER_HOME="$(brew --prefix jmeter)/libexec"` (see **[performance-framework/README.md](./performance-framework/README.md)**). |
+
+Browser report assets: **`prepare`** runs **`build:report-client`** after install so **`report.js`** exists beside **`report.css`**. If charts or the bundled report break, run `npm run build:report-client` from the package root.
+
+### Where to read (documentation index)
+
+| Doc | Contents |
+|-----|----------|
+| [**performance-docs/README.md**](./performance-framework/performance-docs/README.md) | Index of all package guides |
+| [**Beginner track**](./performance-framework/performance-docs/beginner/README.md) | Concepts, stack, why this is separate from Playwright smoke tests |
+| [**QUICKSTART**](./performance-framework/performance-docs/QUICKSTART.md) | First/second/third model, scenario + runner files, commands |
+| [**WORKFLOW**](./performance-framework/performance-docs/WORKFLOW.md) | End-to-end: setup → runs → CI → debugging |
+| [**ARCHITECTURE**](./performance-framework/performance-docs/ARCHITECTURE.md) | Hexagonal boundaries, adapters, reporting, ops |
+| [**FROM-POSTMAN-TO-LOAD-TEST**](./performance-framework/performance-docs/FROM-POSTMAN-TO-LOAD-TEST.md) | Postman (OAuth / headers / POST) → DSL (**English + Hinglish**), workflow diagrams, JSONPlaceholder walkthrough |
+
+### Layout inside `performance-framework/`
+
+| Path | Role |
+|------|------|
+| **`examples/`** | Copy **`jsonplaceholder-load.scenario.ts`** + **`run-jsonplaceholder-load.ts`** for your API |
+| **`src/`** | DSL (`dsl/`), JMeter **`adapters/jmeter/`**, **`reporting/`** (HTML client + reporters), **`cli/perf.ts`**, orchestration |
+| **`performance-docs/`** | All markdown guides (**start here**) |
+| **`perf-output/`** | **Generated only** — JTL, JMX, `index.html`, `report.json`; **never commit** (**[.gitignore](./performance-framework/.gitignore)**) |
+| **`dashboard/`** | Optional Vite UI; **`npm install`** there before **`dev` / build** ([QUICKSTART note](./performance-framework/performance-docs/QUICKSTART.md)) |
+| **`docker/`**, **`k8s/`**, **`ci/`** | Recipes for workers / orchestration / CI examples |
+
+### Commands (run from package root)
+
+```bash
+cd performance-framework
+npm install                    # installs deps + prepares report-client bundle
+
+# Typical dev — no compile step (tsx loads TypeScript from src/)
+npm run example:jsonplaceholder    # GET+POST demo → perf-output/<uuid>/
+npm run dev:smoke                  # CLI run:smoke from source
+
+# Compiled path (publish / CI that runs dist only)
+npm run build                      # bundles report client + tsc → dist/
+node dist/cli/perf.js run:smoke      # perf-fw CLI from dist
+
+npm run lint
+npm run check                      # TypeScript checks (including report client TS)
+```
+
+Interactive runs may open **`http://127.0.0.1:50552/`** for the HTML report (default **`PERF_REPORT_PORT`**). Non-interactive: **`CI=true`**, **`--ci`** where supported, or **`PERF_NO_REPORT_SERVER=1`** so the process does not wait on a server (see **[performance-framework/src/reporting/report-cli.ts](./performance-framework/src/reporting/report-cli.ts)** and the package README).
 
 ## Quick Start
 
@@ -172,9 +229,14 @@ tests/
 docs/
   pom-generator.md    # CLI: browser / desktop / mobile / API POM scaffolding
   browser-automation.md  # Browser tests, PageObject pattern, network fixture
+
+performance-framework/    # Separate package: TypeScript DSL → JMeter → reports (see README there)
+  examples/              # Scenario + runner you copy (JSONPlaceholder demo)
+  performance-docs/       # QUICKSTART, WORKFLOW, Postman→load-test guide
+  src/                   # DSL, adapters/jmeter/, reporting/, cli
 ```
 
-For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/common/pom-generator.md`**. For **HTTP traces** on browser tests, see **`docs/browser/automation.md`** (network fixture + reporter).
+For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/common/pom-generator.md`**. For **HTTP traces** on browser tests, see **`docs/browser/automation.md`** (network fixture + reporter). **Load testing** docs: **`performance-framework/performance-docs/README.md`**.
 
 ## Requirements
 
@@ -185,6 +247,7 @@ For **scaffolding POMs** from a URL, XML, or AX tree, see **`docs/common/pom-gen
 | Desktop (Windows) | .NET Framework                                |
 | Mobile            | Appium server + `webdriverio` installed       |
 | API               | None (uses native fetch)                      |
+| Load / performance (`performance-framework`) | Node 20+, Apache JMeter (**`JMETER_HOME`** / `PATH`). See **`performance-framework/README.md`**. |
 
 ## Vision Fallback (GPT-4o)
 
@@ -237,7 +300,14 @@ APPLE_TV_EMAIL=...       # For desktop login tests
 APPLE_TV_PASSWORD=...
 API_BASE_URL=...         # Override API base URL
 APPIUM_RUNNING=true      # Enable mobile tests
+
+# Load tests (performance-framework / JMeter runner)
+JMETER_HOME=...                  # Where Apache JMeter is installed (or use PATH install)
+PERF_REPORT_PORT=50552         # Optional HTML report preview server port
+PERF_NO_REPORT_SERVER=1        # CI: skip local report server after a run
 ```
+
+When running load tests (`cd performance-framework`), set **`JMETER_HOME`** per **[performance-framework/README.md](./performance-framework/README.md)**.
 
 ## Disposable desktop context
 
