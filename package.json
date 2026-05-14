@@ -41,6 +41,7 @@
     "dotenv": "^16.4.5",
     "openai": "^6.36.0",
     "playwright": "^1.44.0",
+    "winston": "^3.17.0",
     "zod": "^4.4.3"
   },
   "optionalDependencies": {

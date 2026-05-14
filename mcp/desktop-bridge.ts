@@ -8,6 +8,7 @@ import { WindowsAdapter } from '../src/drivers/desktop/windows-adapter';
 import { VisionProvider } from '../src/vision/vision-provider';
 import { UIElement, WindowBounds } from '../src/core/types';
 import { readPngSize } from '../src/utils/image';
+import { logger } from '../src/core/logger';
 
 const ROOT = path.resolve(__dirname, '..');
 
@@ -96,7 +97,9 @@ function buildTestSource(
   lines.push(`import { ${className} } from '${pomRelPath}';`);
   lines.push('');
   lines.push(`test.describe('${appName} - ${intent}', () => {`);
-  lines.push(`  test.skip(process.platform !== 'darwin', 'macOS only');`);
+  lines.push(
+    `  test.skip(!['darwin', 'win32'].includes(process.platform), 'Desktop (macOS or Windows) only');`,
+  );
   lines.push('');
   lines.push(`  test('${intent} @app=${appName}', async ({ app }) => {`);
   lines.push(`    const screen = new ${className}(app as any);`);
@@ -137,18 +140,39 @@ server.tool(
   'Launch or connect to a desktop application and return its window title, PID, and platform.',
   { appName: z.string().describe('Application name (e.g. "Notes", "Calculator", "TV")') },
   async ({ appName }) => {
+    const tool = 'scan_app';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName });
     try {
-      await ensureConnected(appName);
+      if (process.platform === 'win32') {
+        const hit = await WindowsAdapter.findWindow(appName);
+        if (hit) {
+          await (adapter as WindowsAdapter).connect(appName, hit.pid);
+          connectedApp = appName;
+        } else {
+          await ensureConnected(appName);
+        }
+      } else {
+        await ensureConnected(appName);
+      }
       const title = await adapter.getTitle();
+      const pid =
+        process.platform === 'win32'
+          ? (adapter as WindowsAdapter).getConnectedPid() ?? undefined
+          : undefined;
+      const platform = process.platform === 'win32' ? 'win32' : process.platform;
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify({ appName, title, platform: process.platform }, null, 2),
+          text: JSON.stringify({ appName, title, pid, platform }, null, 2),
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `Error connecting to ${appName}: ${err}` }],
+        content: [{ type: 'text' as const, text: `Error connecting to ${appName}: ${e.message}` }],
         isError: true,
       };
     }
@@ -165,19 +189,27 @@ server.tool(
     max: z.number().optional().default(100).describe('Max elements to return (default 100)'),
   },
   async ({ appName, max }) => {
+    const tool = 'get_elements';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName, max });
     try {
       await ensureConnected(appName);
-      const elements = await adapter.getElements();
-      const trimmed = elements.slice(0, max);
+      const elements =
+        process.platform === 'win32'
+          ? await (adapter as WindowsAdapter).getElements(appName, max)
+          : (await adapter.getElements()).slice(0, max);
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'text' as const,
-          text: JSON.stringify(trimmed, null, 2),
+          text: JSON.stringify(elements, null, 2),
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `Error reading elements: ${err}` }],
+        content: [{ type: 'text' as const, text: `Error reading elements: ${e.message}` }],
         isError: true,
       };
     }
@@ -240,14 +272,19 @@ server.tool(
     appName: z.string().describe('Application to focus and capture'),
   },
   async ({ appName }) => {
+    const tool = 'screenshot';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName });
     try {
       const snap = await captureWindow(appName);
       if (snap.buf.length === 0) {
+        logger.error('tool_failed', { tool, appName, error: 'empty screenshot buffer' });
         return {
           content: [{ type: 'text' as const, text: 'Screenshot captured but was empty (check Screen Recording permission).' }],
           isError: true,
         };
       }
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'image' as const,
@@ -256,8 +293,10 @@ server.tool(
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `Screenshot failed: ${err}` }],
+        content: [{ type: 'text' as const, text: `Screenshot failed: ${e.message}` }],
         isError: true,
       };
     }
@@ -268,26 +307,32 @@ server.tool(
 
 server.tool(
   'describe_screen',
-  'Focus the target app, capture only its window, and use GPT-4o vision to describe what is shown. Window-scoped capture means the description is about THIS app, not whatever happens to be on screen. Requires OPENAI_API_KEY.',
+  'Focus the target app, capture only its window, and use GPT-4o vision to describe what is shown. Window-scoped capture means the description is about THIS app, not whatever happens to be on screen. Requires an OpenAI API key (env or Windows DPAPI store).',
   {
     appName: z.string().describe('Application to describe'),
   },
   async ({ appName }) => {
+    const tool = 'describe_screen';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName });
     if (!vision.isAvailable()) {
       return {
-        content: [{ type: 'text' as const, text: 'OPENAI_API_KEY is not set — vision features unavailable.' }],
+        content: [{ type: 'text' as const, text: 'OpenAI API key is not configured — vision features unavailable.' }],
         isError: true,
       };
     }
     try {
       const snap = await captureWindow(appName);
       const description = await vision.describeScreen(snap.buf);
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{ type: 'text' as const, text: description }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `describe_screen failed: ${err}` }],
+        content: [{ type: 'text' as const, text: `describe_screen failed: ${e.message}` }],
         isError: true,
       };
     }
@@ -298,15 +343,18 @@ server.tool(
 
 server.tool(
   'locate_element',
-  'Find a UI element by natural-language description in the target app\'s window. Returns SCREEN-SPACE LOGICAL coordinates (ready to click) translated from image-pixel coords using the captured window bounds + DPI scale. Returns null if the located coord falls outside the window (hallucination guard). Requires OPENAI_API_KEY.',
+  'Find a UI element by natural-language description in the target app\'s window. Returns SCREEN-SPACE LOGICAL coordinates (ready to click). On Windows, coordinates use per-window DPI scaling from GetDpiForWindow. Requires an OpenAI API key (env or Windows DPAPI store).',
   {
     appName: z.string().describe('Application to search in'),
     description: z.string().describe('Natural-language description of the element (e.g. "the Save button", "email text field")'),
   },
   async ({ appName, description: desc }) => {
+    const tool = 'locate_element';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName, description: desc });
     if (!vision.isAvailable()) {
       return {
-        content: [{ type: 'text' as const, text: 'OPENAI_API_KEY is not set — vision features unavailable.' }],
+        content: [{ type: 'text' as const, text: 'OpenAI API key is not configured — vision features unavailable.' }],
         isError: true,
       };
     }
@@ -318,6 +366,44 @@ server.tool(
           content: [{ type: 'text' as const, text: `Element not found on screen: "${desc}"` }],
         };
       }
+
+      if (process.platform === 'win32') {
+        const win = adapter as WindowsAdapter;
+        const bounds = snap.bounds;
+        if (!bounds) {
+          return {
+            content: [{ type: 'text' as const, text: 'locate_element: window bounds unavailable for DPI translation' }],
+            isError: true,
+          };
+        }
+        const hwnd = await win.getMainWindowHandle();
+        const scale = hwnd != null ? await win.getWindowDpiScale(hwnd) : 1;
+        const screenX = bounds.x + Math.round(imgCoords.x / scale);
+        const screenY = bounds.y + Math.round(imgCoords.y / scale);
+        if (
+          screenX < bounds.x ||
+          screenX > bounds.x + bounds.width ||
+          screenY < bounds.y ||
+          screenY > bounds.y + bounds.height
+        ) {
+          throw new Error(
+            'Located coordinates fall outside target window — possible hallucination, rejecting',
+          );
+        }
+        logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify({
+              screen: { x: screenX, y: screenY },
+              image: imgCoords,
+              bounds,
+              dpiScale: scale,
+            }),
+          }],
+        };
+      }
+
       const screenCoords = imageToScreenCoord(imgCoords.x, imgCoords.y, snap);
       if (!screenCoords) {
         return {
@@ -328,6 +414,7 @@ server.tool(
           isError: true,
         };
       }
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'text' as const,
@@ -339,8 +426,10 @@ server.tool(
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `locate_element failed: ${err}` }],
+        content: [{ type: 'text' as const, text: `locate_element failed: ${e.message}` }],
         isError: true,
       };
     }
@@ -358,10 +447,17 @@ server.tool(
     updateIndex: z.boolean().optional().default(true).describe('Append export to tests/pom/index.ts'),
   },
   async ({ appName, className, updateIndex }) => {
+    const tool = 'generate_pom';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName, className });
     try {
       await ensureConnected(appName);
-      const elements = await adapter.getElements();
+      const elements =
+        process.platform === 'win32'
+          ? await (adapter as WindowsAdapter).getElements(appName, 500)
+          : await adapter.getElements();
       if (elements.length === 0) {
+        logger.error('tool_failed', { tool, appName, error: 'no elements' });
         return {
           content: [{ type: 'text' as const, text: 'No elements found — check that the app is running and Accessibility is enabled.' }],
           isError: true,
@@ -378,6 +474,7 @@ server.tool(
       if (updateIndex) appendPomIndex(className, fileBase);
 
       const relPath = path.relative(ROOT, outPath);
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'text' as const,
@@ -385,8 +482,10 @@ server.tool(
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `generate_pom failed: ${err}` }],
+        content: [{ type: 'text' as const, text: `generate_pom failed: ${e.message}` }],
         isError: true,
       };
     }
@@ -405,6 +504,9 @@ server.tool(
     fileName: z.string().optional().describe('Output file name without path (e.g. "notes.desktop.spec.ts"). Defaults to <kebab-app>.desktop.spec.ts'),
   },
   async ({ appName, className, intent, fileName }) => {
+    const tool = 'generate_test';
+    const t0 = Date.now();
+    logger.info('tool_called', { tool, appName, className });
     try {
       const kebab = kebabFromClass(appName);
       const specName = fileName || `${kebab}.desktop.spec.ts`;
@@ -419,6 +521,7 @@ server.tool(
       fs.writeFileSync(outPath, source, 'utf8');
 
       const relPath = path.relative(ROOT, outPath);
+      logger.info('tool_success', { tool, durationMs: Date.now() - t0 });
       return {
         content: [{
           type: 'text' as const,
@@ -426,8 +529,10 @@ server.tool(
         }],
       };
     } catch (err) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      logger.error('tool_failed', { tool, appName, error: e.message, stack: e.stack });
       return {
-        content: [{ type: 'text' as const, text: `generate_test failed: ${err}` }],
+        content: [{ type: 'text' as const, text: `generate_test failed: ${e.message}` }],
         isError: true,
       };
     }

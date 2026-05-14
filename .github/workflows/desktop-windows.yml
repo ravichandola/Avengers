@@ -1,0 +1,52 @@
+name: Desktop Windows Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Compile MCP bridge
+        run: npx tsc --project mcp/tsconfig.json --noEmit
+
+      - name: Run desktop-windows tests
+        run: npx playwright test --project=desktop-windows --reporter=html
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LOG_LEVEL: debug
+
+      - name: Upload Playwright report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-windows
+          path: playwright-report/
+          retention-days: 14
+
+      - name: Upload automation logs
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: automation-logs
+          path: ${{ env.APPDATA }}/desktop-agent/logs/
