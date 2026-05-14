@@ -1,4 +1,5 @@
 import { logger } from '../utils/logger';
+import { hasStoredOrEnvApiKey, loadApiKey } from '../core/secrets';
 
 export interface VisionConfig {
   apiKey?: string;
@@ -32,13 +33,12 @@ export class VisionProvider {
   }
 
   isAvailable(): boolean {
-    return !!(this.config.apiKey || process.env.OPENAI_API_KEY);
+    return !!(this.config.apiKey || hasStoredOrEnvApiKey());
   }
 
   private async getClient(): Promise<any> {
     if (!this.client) {
-      const apiKey = this.config.apiKey ?? process.env.OPENAI_API_KEY;
-      if (!apiKey) throw new Error('OPENAI_API_KEY required for vision features');
+      const apiKey = this.config.apiKey ?? loadApiKey();
 
       const { default: OpenAI } = await import('openai');
       this.client = new OpenAI({ apiKey, baseURL: this.config.baseURL });

@@ -1,0 +1,4 @@
+{
+  "extends": "../../../tsconfig.report-client.json",
+  "include": ["./report-client.tsx"]
+}

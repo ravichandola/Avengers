@@ -21,7 +21,10 @@
     "test:mobile": "npx playwright test --project=mobile-ios",
     "test:api": "npx playwright test --project=api",
     "test:all-browsers": "npx playwright test --project=chrome --project=firefox --project=webkit",
-    "pom:gen": "ts-node --project scripts/tsconfig.json scripts/generate-pom.ts"
+    "pom:gen": "ts-node --project scripts/tsconfig.json scripts/generate-pom.ts",
+    "sidecar:build": "node scripts/sidecar-dotnet.mjs build",
+    "sidecar:clean": "node scripts/sidecar-dotnet.mjs clean",
+    "sidecar:ping": "node scripts/sidecar-dotnet.mjs ping"
   },
   "keywords": [
     "automation",
@@ -41,6 +44,7 @@
     "dotenv": "^16.4.5",
     "openai": "^6.36.0",
     "playwright": "^1.44.0",
+    "winston": "^3.17.0",
     "zod": "^4.4.3"
   },
   "optionalDependencies": {

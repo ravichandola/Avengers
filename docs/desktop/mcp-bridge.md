@@ -7,12 +7,13 @@ The desktop-bridge is a [Model Context Protocol (MCP)](https://modelcontextproto
 ## 1. What problem it solves
 
 When writing desktop automation tests, you need to know:
+
 - What app is running and what's its title?
 - What UI elements exist (buttons, text fields, menus)?
 - What selectors to use (Accessibility names/labels)?
 - What the screen looks like right now?
 
-The MCP bridge answers all of these from inside Cursor, without leaving the IDE. Cursor calls these tools during chat to auto-generate POM classes and test files.
+The MCP bridge answers all of these from inside Cursor, without leaving the IDE. Cursor calls these tools during chat to auto-generate POM classes and test files. On **Windows**, two additional tools can drive the **optional .NET sidecar** for **Office** and **DPAPI** secrets ([.NET sidecar](./dotnet-sidecar.md)).
 
 ---
 
@@ -20,7 +21,7 @@ The MCP bridge answers all of these from inside Cursor, without leaving the IDE.
 
 ```
 mcp/
-├── desktop-bridge.ts     # The MCP server (all 7 tools)
+├── desktop-bridge.ts     # The MCP server (scan, vision, POM, Office, secrets — see §4)
 └── tsconfig.json         # TypeScript config for the MCP server
 
 .cursor/
@@ -49,21 +50,28 @@ The `.cursor/mcp.json` configuration tells Cursor to launch the bridge:
 }
 ```
 
-When you open the project in Cursor and enable MCP, the bridge starts automatically. Cursor can then call any of the 7 tools during Agent Mode conversations.
+When you open the project in Cursor and enable MCP, the bridge starts automatically. Cursor can then call any of the tools below during Agent Mode conversations.
 
 ---
 
-## 4. The 7 MCP tools
+## 4. MCP tools (reference)
+
+There are **nine** tools: **1–7** cover **app discovery, AX tree, screenshots, vision, and codegen**. **8–9** route to the **optional .NET sidecar** on Windows (Office / Graph / DPAPI); on macOS they return a clear **Windows-only** error without crashing.
+
+---
+
+### Tools 1–7 (desktop UI & vision)
 
 ### Tool 1: `scan_app`
 
 **Connect to a desktop app** and return its window title, PID, and platform.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter | Type   | Description                                         |
+| --------- | ------ | --------------------------------------------------- |
 | `appName` | string | Application name (e.g. "Notes", "Calculator", "TV") |
 
 **Example response:**
+
 ```json
 { "appName": "Notes", "title": "Notes", "platform": "darwin" }
 ```
@@ -76,16 +84,29 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Read the Accessibility tree** of a running desktop app. Returns structured `UIElement` objects.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `appName` | string | Application name |
-| `max` | number (optional) | Max elements to return (default: 100) |
+| Parameter | Type              | Description                           |
+| --------- | ----------------- | ------------------------------------- |
+| `appName` | string            | Application name                      |
+| `max`     | number (optional) | Max elements to return (default: 100) |
 
 **Example response (truncated):**
+
 ```json
 [
-  { "id": "ax-1", "name": "New Note", "role": "button", "enabled": true, "bounds": { "x": 10, "y": 50, "width": 80, "height": 30 } },
-  { "id": "ax-2", "name": "Search", "role": "textField", "enabled": true, "bounds": { "x": 200, "y": 10, "width": 200, "height": 25 } }
+  {
+    "id": "ax-1",
+    "name": "New Note",
+    "role": "button",
+    "enabled": true,
+    "bounds": { "x": 10, "y": 50, "width": 80, "height": 30 }
+  },
+  {
+    "id": "ax-2",
+    "name": "Search",
+    "role": "textField",
+    "enabled": true,
+    "bounds": { "x": 200, "y": 10, "width": 200, "height": 25 }
+  }
 ]
 ```
 
@@ -97,8 +118,8 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Capture a PID-scoped screenshot** of the target app window. The bridge focuses the app first, then captures only that window (not full desktop). Returns base64-encoded PNG.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter | Type   | Description                      |
+| --------- | ------ | -------------------------------- |
 | `appName` | string | Application to focus and capture |
 
 **Returns:** Base64 PNG image.
@@ -111,8 +132,8 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Window screenshot + GPT-4o vision** to describe what's visible in the target app, not ambient desktop UI.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter | Type   | Description                            |
+| --------- | ------ | -------------------------------------- |
 | `appName` | string | Application to screenshot and describe |
 
 **Requires:** `OPENAI_API_KEY` in environment.
@@ -125,12 +146,13 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Vision-based element location** — describe an element in natural language, get translated screen coordinates that are safe to click.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `appName` | string | Application to search in |
+| Parameter     | Type   | Description                                                               |
+| ------------- | ------ | ------------------------------------------------------------------------- |
+| `appName`     | string | Application to search in                                                  |
 | `description` | string | Natural-language description (e.g. "the Save button", "email text field") |
 
 **Example response:**
+
 ```json
 {
   "screen": { "x": 450, "y": 320 },
@@ -144,6 +166,7 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 **Use case:** When AX tree selectors are insufficient and you need coordinate-based interaction with bounds/DPI-safe translation.
 
 **Safety behavior:**
+
 - Focus is PID-verified before capture.
 - Coordinates are mapped image-space -> screen-space via window bounds and scale.
 - If mapped coordinates fall outside the target window, the tool returns an error (hallucination guard).
@@ -154,23 +177,24 @@ When you open the project in Cursor and enable MCP, the bridge starts automatica
 
 **Scan an app's Accessibility tree and generate a DesktopPage POM** class file.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `appName` | string | Application to scan |
-| `className` | string | POM class name (e.g. "NotesScreen") |
+| Parameter     | Type               | Description                                           |
+| ------------- | ------------------ | ----------------------------------------------------- |
+| `appName`     | string             | Application to scan                                   |
+| `className`   | string             | POM class name (e.g. "NotesScreen")                   |
 | `updateIndex` | boolean (optional) | Append export to `tests/pom/index.ts` (default: true) |
 
 **Output:** Writes `tests/pom/desktop/<kebab-class-name>.ts` with a `DesktopPage` subclass containing all AX elements as `ElementRef` properties.
 
 **Example generated code:**
+
 ```typescript
-import { DesktopPage } from '../../../src/drivers/desktop/pom/desktop-page';
-import { DesktopDriver } from '../../../src/drivers/desktop/desktop-driver';
+import { DesktopPage } from "../../../src/drivers/desktop/pom/desktop-page";
+import { DesktopDriver } from "../../../src/drivers/desktop/desktop-driver";
 
 export class NotesScreen extends DesktopPage {
-  readonly newNote = this.element("New Note");       // button
-  readonly search = this.element("Search");          // textField
-  readonly noteBody = this.element("Note Body");     // textArea
+  readonly newNote = this.element("New Note"); // button
+  readonly search = this.element("Search"); // textField
+  readonly noteBody = this.element("Note Body"); // textArea
 
   constructor(driver: DesktopDriver) {
     super(driver);
@@ -184,14 +208,49 @@ export class NotesScreen extends DesktopPage {
 
 **Scaffold a Playwright desktop test** spec file that imports a POM.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `appName` | string | Application name (used in test title and `@app` tag) |
-| `className` | string | POM class name to import |
-| `intent` | string | Short description of what the test verifies |
-| `fileName` | string (optional) | Output file name (default: `<kebab-app>.desktop.spec.ts`) |
+| Parameter   | Type              | Description                                               |
+| ----------- | ----------------- | --------------------------------------------------------- |
+| `appName`   | string            | Application name (used in test title and `@app` tag)      |
+| `className` | string            | POM class name to import                                  |
+| `intent`    | string            | Short description of what the test verifies               |
+| `fileName`  | string (optional) | Output file name (default: `<kebab-app>.desktop.spec.ts`) |
 
 **Output:** Writes `tests/desktop/<name>.desktop.spec.ts` with test scaffolding.
+
+---
+
+### Tool 8: `office_action`
+
+**Run Office- or Graph-related actions** via the optional **.NET sidecar** (`OfficeInterop.exe`). This targets **Excel / Word / Outlook** RPCs only. UIA discovery tools **1–7** use **`WindowsAdapter`** (FlaUI-backed UIA when `OfficeInterop.exe` is built, else PowerShell) and do **not** use the Office/Graph RPC surface.
+
+| Parameter | Type   | Description                                                                                                                                                             |
+| --------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `action`  | enum   | One of: `excel.read_cell`, `excel.write_cell`, `excel.read_range`, `excel.run_macro`, `word.insert_text`, `word.export_pdf`, `outlook.send_email`, `outlook.list_inbox` |
+| `args`    | record | Action-specific payload (`file`, `cell`, `tenantId`, …) — see [.NET sidecar § RPC reference](./dotnet-sidecar.md#6-rpc-methods-reference)                               |
+
+**Platform:** **`win32` only** — otherwise returns a short message with `isError: true`.
+
+**Prerequisites:** Sidecar built on Windows (`npm run sidecar:build`). Without the binary, the tool returns an error string from the bridge.
+
+**Graph tip:** For app-only (client credentials) flows, include **`mailbox`** (UPN or user id) in `args` so the sidecar uses `/users/{mailbox}/...` instead of `/me`.
+
+---
+
+### Tool 9: `manage_secret`
+
+**Store or load** a user-scoped secret using **Windows DPAPI** (encrypted file under `%APPDATA%\desktop-agent\`). Plaintext is **never** written to the repo.
+
+| Parameter   | Type              | Description                                                  |
+| ----------- | ----------------- | ------------------------------------------------------------ |
+| `operation` | `save` \| `load`  | `save` encrypts; `load` returns decrypted value as tool text |
+| `name`      | string            | Stable key, e.g. `openai-api-key`                            |
+| `value`     | string (optional) | Required when `operation === 'save'`                         |
+
+**Platform:** **`win32` only** for real crypto; other OSes get a graceful Windows-only error.
+
+**Security note:** **`load`** returns the secret to the MCP client — treat chat logs and traces as sensitive.
+
+**Full protocol:** [.NET sidecar](./dotnet-sidecar.md)
 
 ---
 
@@ -225,22 +284,22 @@ The server communicates via stdio (JSON-RPC). You can use [MCP Inspector](https:
 
 ```typescript
 server.tool(
-  'my_new_tool',
-  'Description of what the tool does.',
+  "my_new_tool",
+  "Description of what the tool does.",
   {
-    appName: z.string().describe('Application name'),
-    myParam: z.string().describe('What this parameter is for'),
+    appName: z.string().describe("Application name"),
+    myParam: z.string().describe("What this parameter is for"),
   },
   async ({ appName, myParam }) => {
     try {
       await ensureConnected(appName);
       // Your logic here
       return {
-        content: [{ type: 'text' as const, text: 'result' }],
+        content: [{ type: "text" as const, text: "result" }],
       };
     } catch (err) {
       return {
-        content: [{ type: 'text' as const, text: `Error: ${err}` }],
+        content: [{ type: "text" as const, text: `Error: ${err}` }],
         isError: true,
       };
     }
@@ -251,6 +310,7 @@ server.tool(
 ### Step 2: Use shared state
 
 The bridge maintains:
+
 - `adapter` — `MacOSAdapter` or `WindowsAdapter` (auto-detected by platform)
 - `vision` — `VisionProvider` for screenshot + GPT-4o vision
 - `connectedApp` — currently connected app name
@@ -266,11 +326,12 @@ Restart Cursor (or reload MCP) to pick up the new tool. The tool will appear in 
 
 The bridge uses these framework components:
 
-| Component | From | Used for |
-|-----------|------|----------|
-| `MacOSAdapter` | `src/drivers/desktop/macos-adapter.ts` | AX tree, clicks, screenshots on macOS |
-| `WindowsAdapter` | `src/drivers/desktop/windows-adapter.ts` | UIA, PowerShell on Windows |
-| `VisionProvider` | `src/vision/vision-provider.ts` | Screenshot → GPT-4o for describe/locate |
-| `UIElement` | `src/core/types.ts` | Structured element data |
+| Component                     | From                                     | Used for                                                  |
+| ----------------------------- | ---------------------------------------- | --------------------------------------------------------- |
+| `MacOSAdapter`                | `src/drivers/desktop/macos-adapter.ts`   | AX tree, clicks, screenshots on macOS                     |
+| `WindowsAdapter`              | `src/drivers/desktop/windows-adapter.ts` | UIA, PowerShell on Windows                                |
+| `DotNetBridge` / `getSidecar` | `src/drivers/desktop/dotnet-bridge.ts`   | Optional stdio client for `OfficeInterop.exe` (tools 8–9) |
+| `VisionProvider`              | `src/vision/vision-provider.ts`          | Screenshot → GPT-4o for describe/locate                   |
+| `UIElement`                   | `src/core/types.ts`                      | Structured element data                                   |
 
 The POM generation helpers (`buildPomSource`, `buildTestSource`, etc.) are self-contained in the bridge file — they construct TypeScript source strings and write them to disk.

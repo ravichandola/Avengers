@@ -1,58 +1,165 @@
 # Desktop automation — Windows
 
-Windows automation uses **UI Automation–style** interaction via **PowerShell / FlaUI-style adapters** in this framework. Tests still use **`app`** and the same **`IDriver`** surface as macOS.
+Windows automation in this repository drives **native Windows applications** (Win32, WPF, and similar) through **`DesktopDriver`** and **`WindowsAdapter`**. Tests use the same **`IDriver`** surface as macOS (`click`, `fill`, `getTitle`, `getElements`, …) so your **spec structure** stays familiar; only the **selector semantics** and **runtime** change.
 
-## When is this guide for you?
+**New to Windows UI automation?** Read [**Windows automation from zero**](./windows-automation-from-zero.md) first — it explains layers, UIA, and how to write your first `*.desktop.spec.ts` in depth.
 
-You run tests on **Windows** and automate **desktop apps** (Win32, WPF, etc.), not the browser projects.
+**Office / Graph / DPAPI / FlaUI UIA (optional):** [.NET sidecar](./dotnet-sidecar.md)
 
-**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md). **Stack diagram:** [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows).
+**Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md) · **Stack diagram:** [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows) · **Desktop stack:** [architecture/desktop.md](../architecture/desktop.md)
 
-## Prerequisites
+---
 
-1. **Windows host** — run Playwright on a Windows machine or VM.
-2. **Permissions** — the user running tests must be allowed to drive UI automation (session not locked if your stack requires an interactive desktop).
-3. **Optional:** Install any runtime your adapter expects (e.g. PowerShell execution policy for scripts).
+## Table of contents
 
-## Configuration
+1. [When this guide applies](#1-when-this-guide-applies)
+2. [Architecture on Windows (layers)](#2-architecture-on-windows-layers)
+3. [Why each component exists](#3-why-each-component-exists)
+4. [Prerequisites](#4-prerequisites)
+5. [Configuration](#5-configuration)
+6. [Launch and window state](#6-launch-and-window-state)
+7. [Running tests](#7-running-tests)
+8. [Writing tests](#8-writing-tests)
+9. [Selectors and WindowsAdapter](#9-selectors-and-windowsadapter)
+10. [Vision safety model](#10-vision-safety-model)
+11. [Optional: .NET sidecar](#11-optional-net-sidecar)
+12. [Disposable driver usage](#12-disposable-driver-usage)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Related](#14-related)
+
+---
+
+## 1. When this guide applies
+
+You run tests on **Windows** and automate **desktop apps**, not the browser projects (`*.browser.spec.ts`).
+
+You share **one repo** with macOS desktop tests: same **`src/fixtures`**, same **`*.desktop.spec.ts`** naming; **Playwright project metadata** chooses **`platform: 'windows'`** vs **`'macos'`**.
+
+---
+
+## 2. Architecture on Windows (layers)
+
+Data flows **down** from tests to the OS; elements, titles, and screenshots flow **up**.
+
+```text
+┌─────────────────────────────────────────────────────────────────────────┐
+│  tests/**/*.desktop.spec.ts + tests/pom/desktop/**                      │
+│  Uses fixture `app` → IDriver API                                       │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  playwright.config.ts — project `desktop-windows`                       │
+│  metadata.platform = 'windows'  →  DriverFactory builds DesktopDriver   │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  src/fixtures/index.ts                                                  │
+│  Auto-launch from @app= tag / DESKTOP_APP_NAME / metadata.desktop       │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  DesktopDriver (src/drivers/desktop/desktop-driver.ts)                  │
+│  Single façade: focus, click, fill, getElements, screenshot, …           │
+│  Delegates to internal WindowsAdapter when config.platform === windows  │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  WindowsAdapter (src/drivers/desktop/windows-adapter.ts)                │
+│  UIA: FlaUI via sidecar when OfficeInterop.exe exists, else PowerShell  │
+│  Focus / window chrome / screenshots: PowerShell + Win32 helpers       │
+│  Same sidecar process also serves Office / Graph / DPAPI (see §11)      │
+└───────────────────────────────────┬─────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Windows OS + target application (HWND, input queue, UIA providers)     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**MCP (IDE-time, parallel track):** `mcp/desktop-bridge.ts` uses the **same** `WindowsAdapter` instance pattern for **`scan_app`**, **`get_elements`**, etc. It does **not** replace Playwright — it **helps you discover** selectors and generate POMs while authoring tests.
+
+---
+
+## 3. Why each component exists
+
+| Piece                         | Responsibility on Windows                                                                                                |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **`desktop-windows` project** | Ensures tests run with **`metadata.platform: 'windows'`** so the factory never accidentally instantiates `MacOSAdapter`. |
+| **`DesktopDriver`**           | Keeps **one** stable `IDriver` type for cross-platform desktop specs and shared POM bases.                               |
+| **`WindowsAdapter`**          | **UIA** for tree + input: **FlaUI** (sidecar RPC) when `OfficeInterop.exe` exists, else **PowerShell**; **Win32** focus, screenshots, SendKeys stay in the adapter. |
+| **`VisionProvider`**          | Optional **screenshot + LLM** path when AX names are missing; used via driver wrapper / MCP tools.                       |
+| **`.NET sidecar`**            | **`OfficeInterop.exe`** — **FlaUI UIA3** (STA) plus optional **COM + Graph + DPAPI**. See [dotnet-sidecar.md](./dotnet-sidecar.md). |
+| **MCP bridge**                | **Human/agent** loop: inspect live tree, screenshot, codegen — faster than blind trial-and-error.                        |
+
+---
+
+## 4. Prerequisites
+
+1. **Windows host** — physical PC, VM, or Windows CI agent with an **interactive** session suitable for UIA (organization-dependent for headless CI).
+2. **Permissions** — the user running tests must be allowed to drive UI automation; avoid **locked** sessions if your stack requires a visible desktop.
+3. **PowerShell** — adapter runs encoded scripts; respect your org’s **execution policy** if locked down.
+4. **Optional .NET 8 SDK** — required to **build** `OfficeInterop.exe`. You need a built exe for **FlaUI-backed** UIA (recommended on Windows agents) and for [Office / Graph / DPAPI](./dotnet-sidecar.md). Pure PowerShell UIA still works without building.
+
+---
+
+## 5. Configuration
 
 ### File naming
 
-Use **`*.desktop.spec.ts`**. The **platform** is determined by the Playwright **project**:
-
-- `desktop-windows` → `metadata.platform: 'windows'`
+Use **`*.desktop.spec.ts`**. The **platform** is determined by the Playwright **project**, not the file name alone.
 
 ### Playwright project
 
 In `playwright.config.ts`, **`desktop-windows`** sets:
 
 ```ts
-metadata: { platform: 'windows' }
+metadata: {
+  platform: "windows";
+}
 ```
 
-`DriverFactory` then creates **`DesktopDriver`** with the **Windows** adapter.
+`DriverFactory` then creates **`DesktopDriver`**, which constructs **`WindowsAdapter`** on **`launch()`**.
 
-### Launch options
+### Environment and tags
 
-| Option | Purpose |
-|--------|---------|
-| **`name`** | **Required** — window/application identification string your adapter uses |
-| `pid` | Optional process attachment when supported |
-| `windowState` | Optional: `normal` \| `maximized` \| `fullscreen` (default is `maximized`) |
+| Mechanism                                                 | Effect                                                                    |
+| --------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **`@app=Notepad`** in test title                          | Fixture passes **`name: 'Notepad'`** into launch when auto-launch applies |
+| **`DESKTOP_APP_NAME`** in `.env` / `desktop.env`          | Default app when no `@app=` tag                                           |
+| **`@windowState=maximized`** (or `normal` / `fullscreen`) | Overrides initial window state                                            |
+| **`@platform=windows`** in title                          | Forces Windows adapter even if you duplicate project metadata (rare)      |
+
+See [Environment variables](../configuration/environment.md) for file layering.
+
+---
+
+## 6. Launch and window state
+
+| Option            | Purpose                                                                                                                    |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| **`name`**        | **Required** for launch — string used to resolve the process/window (adapter-specific normalization, e.g. `.exe` handling) |
+| **`pid`**         | Optional attachment when you already know the process id                                                                   |
+| **`windowState`** | `normal` \| `maximized` \| `fullscreen` (fixture default is **`maximized`**)                                               |
 
 Example:
 
 ```typescript
-await app.launch({ name: 'Notepad', windowState: 'maximized' });
+await app.launch({ name: "Notepad", windowState: "maximized" });
 ```
 
 ### Window-state behavior on Windows
 
-- `maximized` (default): uses `ShowWindow(SW_MAXIMIZE)` on the resolved app window.
-- `fullscreen`: applies borderless fullscreen (monitor-sized, caption/border removed).
-- `normal`: no post-launch window-state change.
+- **`maximized`** (default): `ShowWindow(SW_MAXIMIZE)` on the resolved app window.
+- **`fullscreen`**: borderless fullscreen sized to the monitor.
+- **`normal`**: no post-launch window-state mutation.
 
-## Running tests
+---
+
+## 7. Running tests
 
 On **Windows**:
 
@@ -60,68 +167,115 @@ On **Windows**:
 npx playwright test --project=desktop-windows
 ```
 
-You can add an npm script mirroring macOS, e.g. in `package.json`:
+You can add a script in `package.json` (optional):
 
 ```json
 "test:desktop-win": "npx playwright test --project=desktop-windows"
 ```
 
-### CI tip
+### CI
 
-Use a **Windows** runner (GitHub Actions `windows-latest`, Azure DevOps Windows agent, etc.). Linux agents cannot run native Windows UI tests.
+Use a **Windows** runner (`windows-latest`, self-hosted Windows, Azure DevOps Windows queue). **Linux agents cannot execute native Windows UIA tests.**
 
-## Writing tests
+---
 
-Same shape as macOS:
+## 8. Writing tests
+
+Same **fixture shape** as macOS:
 
 ```typescript
-import { test, expect } from '../../src/fixtures';
+import { test, expect } from "../../src/fixtures";
 
-test('opens Notepad', async ({ app }) => {
-  await app.launch({ name: 'Notepad' });
-  await app.fill('text_editor', 'Hello from automation');
+test("opens Notepad @app=Notepad", async ({ app }) => {
+  const title = await app.getTitle();
+  expect(title.length).toBeGreaterThan(0);
 });
 ```
 
-Selector strings map through your **Windows adapter** (automation id, name, etc.). Coordinate with how **`WindowsAdapter`** resolves targets in code.
-
-### Platform-specific skips (optional)
-
-If you share one repo between Mac and Windows CI:
+If you **share** one spec file between macOS and Windows projects, guard with:
 
 ```typescript
-test.skip(process.platform !== 'win32', 'Windows only');
+test.skip(process.platform !== "win32", "Windows only");
 ```
 
-## Troubleshooting
+(or the inverse for macOS-only flows).
 
-| Issue | What to check |
-|-------|----------------|
-| Runner is macOS / Linux | Use `--project=desktop-windows` only on Windows |
-| Element not found | Prefer stable **AutomationId** in the app; align selector naming with adapter |
-| Flaky focus | Driver now auto-focuses before click/fill/keyPress and verifies foreground ownership by PID |
+---
 
-## Vision safety model
+## 9. Selectors and WindowsAdapter
 
-For vision fallback on desktop:
+**Selectors are not CSS.** They are matched against **UI Automation–backed** element data exposed by **`getElements()`** — typically **name**, **automation id**, **localized control type**, depending on adapter resolution logic in **`windows-adapter.ts`**.
 
-1. Window focus is PID-verified.
-2. Capture is window-scoped (not whole desktop).
-3. Coordinates are translated from image-space to screen-space using bounds + DPI scale.
-4. Out-of-window coordinates are rejected.
+**Workflow:**
 
-This reduces cross-app misclick risk when multiple windows are visible.
+1. Prefer **stable AutomationId** from your application team.
+2. Use **`await app.getElements()`** in a scratch test or MCP **`get_elements`** to copy exact strings.
+3. Wrap repeated flows in **POM** classes under **`tests/pom/desktop/`** extending **`DesktopPage`**.
 
-## Disposable driver usage
+---
+
+## 10. Vision safety model
+
+When vision fallback runs on desktop:
+
+1. **Focus** is tied to the **connected PID**.
+2. **Capture** is **window-scoped** when bounds exist (not arbitrary full-desktop clicks without context).
+3. **Coordinates** map from image space to screen space using **window bounds + DPI scale**.
+4. **Out-of-window** mapped coordinates are **rejected** to reduce misclick risk.
+
+This reduces cross-app leakage when multiple windows overlap.
+
+---
+
+## 11. Optional: .NET sidecar (FlaUI + Office / Graph / DPAPI)
+
+The same **`OfficeInterop.exe`** process handles two concerns:
+
+1. **FlaUI / UIA3** — When the binary exists, **`WindowsAdapter`** prefers **`uia.*`** RPC (STA thread, stable pattern APIs) for **`getElements`**, **`click`**, **`fill`**, **`getText`**, and **`isVisible`**, and **falls back to PowerShell** if the RPC is unavailable or errors.
+2. **Office, Graph, DPAPI** — Typed helpers and MCP tools (**`office_action`**, **`manage_secret`**) still **require** the sidecar and fail with a clear message if the exe is missing.
+
+**Build:** `npm run sidecar:build` on Windows. **Protocol and method tables:** [.NET sidecar](./dotnet-sidecar.md).
+
+You can run many **Notepad-style** UI tests **without** building the sidecar (PowerShell UIA path). Building is recommended for **FlaUI** behavior and required for **Excel/Word/Outlook/secrets** automation.
+
+---
+
+## 12. Disposable driver usage
+
+Outside Playwright fixtures you can use **`createDesktopApp`**:
 
 ```typescript
-import { createDesktopApp } from '../src/drivers/desktop/desktop-driver';
+// Import depth depends on spec location, e.g. from tests/desktop/:
+import { createDesktopApp } from "../../src/drivers/desktop/desktop-driver";
 
-await using app = await createDesktopApp({ name: 'Notepad', windowState: 'maximized' });
-await app.fill('text_editor', 'Hello from automation');
+await using app = await createDesktopApp({
+  name: "Notepad",
+  windowState: "maximized",
+});
+await app.fill("text_editor", "Hello from automation");
 ```
 
-## Related
+`await using` triggers **`Symbol.asyncDispose`** on scope exit (TypeScript 5.2+).
 
-- **macOS desktop:** [macOS](./macos.md)  
-- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  
+---
+
+## 13. Troubleshooting
+
+| Issue                   | What to check                                                                                                                   |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Runner is macOS / Linux | Only **`--project=desktop-windows`** on a **Windows** host drives UIA                                                           |
+| Element not found       | Dump **`getElements()`**; align string with **AutomationId** or **Name**                                                        |
+| Flaky focus             | Driver **auto-focuses** before `click` / `fill` / `keyPress` and verifies foreground **PID**                                    |
+| Sidecar errors / FlaUI fallback | Binary missing, or `uia.*` failed (see stderr)                                                                       | **`npm run sidecar:build`**; [dotnet-sidecar § Troubleshooting](./dotnet-sidecar.md#13-troubleshooting) |
+
+---
+
+## 14. Related
+
+- **Beginner walkthrough:** [Windows automation from zero](./windows-automation-from-zero.md)
+- **macOS desktop:** [macOS](./macos.md)
+- **MCP tools (scan, POM, Office):** [Desktop bridge (MCP)](./mcp-bridge.md)
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)
+- **Architecture hub:** [Desktop stack](../architecture/desktop.md)
+
+[← Desktop hub](./README.md) · [Documentation home](../README.md)

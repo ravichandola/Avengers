@@ -27,23 +27,25 @@ Use **`*.desktop.spec.ts`**. Both `desktop-macos` and `desktop-windows` projects
 `desktop-macos` sets:
 
 ```ts
-metadata: { platform: 'macos' }
+metadata: {
+  platform: "macos";
+}
 ```
 
 That makes `DriverFactory` build a **`DesktopDriver`** with macOS adapters.
 
 ### Launch options (`launch`)
 
-| Option | Purpose |
-|--------|---------|
-| **`name`** | **Required** — application name as understood by the adapter (e.g. `'TV'` for Apple TV) |
-| `pid` | Optional attach by process id if your adapter supports it |
-| `windowState` | Optional: `normal` \| `maximized` \| `fullscreen` (default is `maximized`) |
+| Option        | Purpose                                                                                 |
+| ------------- | --------------------------------------------------------------------------------------- |
+| **`name`**    | **Required** — application name as understood by the adapter (e.g. `'TV'` for Apple TV) |
+| `pid`         | Optional attach by process id if your adapter supports it                               |
+| `windowState` | Optional: `normal` \| `maximized` \| `fullscreen` (default is `maximized`)              |
 
 Example:
 
 ```typescript
-await app.launch({ name: 'TV', windowState: 'maximized' });
+await app.launch({ name: "TV", windowState: "maximized" });
 ```
 
 ### Window-state behavior on macOS
@@ -73,7 +75,7 @@ npx playwright test --project=desktop-macos tests/desktop/apple-tv.desktop.spec.
 Example pattern from the sample suite:
 
 ```typescript
-test.skip(process.platform !== 'darwin', 'macOS only');
+test.skip(process.platform !== "darwin", "macOS only");
 ```
 
 Use this so Linux/Windows CI does not fail when desktop specs are collected.
@@ -81,12 +83,12 @@ Use this so Linux/Windows CI does not fail when desktop specs are collected.
 ## Writing tests
 
 ```typescript
-import { test, expect } from '../../src/fixtures';
+import { test, expect } from "../../src/fixtures";
 
-test.skip(process.platform !== 'darwin', 'macOS only');
+test.skip(process.platform !== "darwin", "macOS only");
 
-test('open Apple TV', async ({ app }) => {
-  await app.launch({ name: 'TV' });
+test("open Apple TV", async ({ app }) => {
+  await app.launch({ name: "TV" });
   const title = await app.getTitle();
   expect(title.length).toBeGreaterThan(0);
 });
@@ -103,13 +105,13 @@ Use environment variables (never hardcode passwords):
 ```typescript
 const email = process.env.APPLE_TV_EMAIL;
 const password = process.env.APPLE_TV_PASSWORD;
-test.skip(!email || !password, 'Set APPLE_TV_EMAIL and APPLE_TV_PASSWORD');
+test.skip(!email || !password, "Set APPLE_TV_EMAIL and APPLE_TV_PASSWORD");
 
-await app.launch({ name: 'TV' });
-await app.click('signin_button');
-await app.fill('apple_id_email_input', email!);
-await app.fill('apple_id_password_input', password!);
-await app.click('login_button');
+await app.launch({ name: "TV" });
+await app.click("signin_button");
+await app.fill("apple_id_email_input", email!);
+await app.fill("apple_id_password_input", password!);
+await app.click("login_button");
 ```
 
 Run:
@@ -137,24 +139,27 @@ This avoids accidental interaction with another frontmost app/window.
 You can use `await using` for automatic cleanup:
 
 ```typescript
-import { createDesktopApp } from '../src/drivers/desktop/desktop-driver';
+import { createDesktopApp } from "../src/drivers/desktop/desktop-driver";
 
-await using app = await createDesktopApp({ name: 'Notes', windowState: 'maximized' });
-await app.click('New Note');
+await using app = await createDesktopApp({
+  name: "Notes",
+  windowState: "maximized",
+});
+await app.click("New Note");
 ```
 
 `close()` is called automatically when scope exits.
 
 ## Troubleshooting
 
-| Issue | What to check |
-|-------|----------------|
-| “App name required” | Pass `name:` to `launch()` |
-| No UI interaction | Accessibility permission for your runner app |
-| Wrong window | Ensure app is installed; use correct bundle/display name for `name` |
-| Tests run on Linux CI | Skip or use a macOS runner for `.desktop.spec.ts` |
+| Issue                 | What to check                                                       |
+| --------------------- | ------------------------------------------------------------------- |
+| “App name required”   | Pass `name:` to `launch()`                                          |
+| No UI interaction     | Accessibility permission for your runner app                        |
+| Wrong window          | Ensure app is installed; use correct bundle/display name for `name` |
+| Tests run on Linux CI | Skip or use a macOS runner for `.desktop.spec.ts`                   |
 
 ## Related
 
-- **Windows desktop:** [Windows](./windows.md)  
-- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)  
+- **Windows desktop:** [Windows](./windows.md)
+- **First test & setup:** [First test & setup](../configuration/first-test-and-setup.md)

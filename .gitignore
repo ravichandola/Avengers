@@ -16,3 +16,7 @@ coverage/
 test-results/
 playwright-report/
 blob-report/
+
+# .NET sidecar build artifacts
+sidecar/*/bin/
+sidecar/*/obj/

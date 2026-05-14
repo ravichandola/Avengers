@@ -1,20 +1,98 @@
 import { exec, execSync } from 'child_process';
+import fs from 'fs';
 import { promisify } from 'util';
-import { FocusOptions, UIElement, WindowBounds, WindowState } from '../../core/types';
+import { FocusOptions, LaunchOptions, UIElement, WindowBounds, WindowState } from '../../core/types';
+import { withRetry } from '../../core/retry';
 import { logger } from '../../utils/logger';
 import { sleep } from '../../utils/retry';
+import { WINDOWS_UIA_HELPERS_PS1 } from './windows-uia-helpers';
+import type { IDesktopAdapter } from './desktop-adapter.interface';
 
 const execAsync = promisify(exec);
 
-export class WindowsAdapter {
+function runEncodedPowerShell(script: string): Promise<{ stdout: string }> {
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return execAsync(
+    `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
+    { maxBuffer: 1024 * 1024 * 16 },
+  );
+}
+
+/** Lazy-loaded once — keeps `dotnet-bridge` off the critical path on non-Windows runtimes. */
+let dotNetBridgeModule: Promise<typeof import('./dotnet-bridge')> | null = null;
+function loadDotNetBridge(): Promise<typeof import('./dotnet-bridge')> {
+  dotNetBridgeModule ??= import('./dotnet-bridge');
+  return dotNetBridgeModule;
+}
+
+export class WindowsAdapter implements IDesktopAdapter {
   private appName: string = '';
   private pid: number | null = null;
+
+  /**
+   * Find a top-level visible window whose title contains `appName` (case-insensitive).
+   * Used by MCP `scan_app` before connecting by PID.
+   */
+  static async findWindow(
+    appName: string,
+  ): Promise<{ title: string; pid: number } | null> {
+    const needle = appName.replace(/'/g, "''");
+    const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public class DaFindWin {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+}
+"@
+$needle = '${needle}'
+$best = $null
+$bestPid = 0
+$cb = [DaFindWin+EnumWindowsProc] {
+  param($h, $l)
+  if (-not [DaFindWin]::IsWindowVisible($h)) { return $true }
+  $sb = New-Object System.Text.StringBuilder 1024
+  [void][DaFindWin]::GetWindowText($h, $sb, $sb.Capacity)
+  $t = $sb.ToString()
+  if ([string]::IsNullOrWhiteSpace($t)) { return $true }
+  if ($t.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -lt 0) { return $true }
+  $p = [uint32]0
+  [DaFindWin]::GetWindowThreadProcessId($h, [ref]$p) | Out-Null
+  if ($p -gt 0) { $script:best = $t; $script:bestPid = [int]$p; return $false }
+  return $true
+}
+[DaFindWin]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+if ($script:bestPid -gt 0) { Write-Output ($script:bestPid.ToString() + '|' + $script:best) }
+`.trim();
+    try {
+      const { stdout } = await runEncodedPowerShell(script);
+      const line = stdout.trim();
+      const pipe = line.indexOf('|');
+      if (pipe <= 0) return null;
+      const pid = parseInt(line.slice(0, pipe), 10);
+      const title = line.slice(pipe + 1);
+      if (isNaN(pid) || !title) return null;
+      return { pid, title };
+    } catch {
+      return null;
+    }
+  }
+
+  getConnectedPid(): number | null {
+    return this.pid;
+  }
 
   async connect(
     appName: string,
     pid?: number,
     windowState?: WindowState,
-  ): Promise<void> {
+  ): Promise<{ pid: number; title: string }> {
     this.appName = appName;
 
     if (pid) {
@@ -29,10 +107,44 @@ export class WindowsAdapter {
       await this.applyWindowState(windowState);
       await this.ensureFocused().catch(() => {});
     }
+    const title = await this.getTitle();
     logger.info(
       'Windows',
       `Connected to ${appName} (PID: ${this.pid}${windowState ? `, window=${windowState}` : ''})`,
     );
+    return { pid: this.pid!, title };
+  }
+
+  async launch(appName: string, _options?: LaunchOptions): Promise<{ pid: number }> {
+    const image = WindowsAdapter.normalizeProcessImageName(appName);
+    await execAsync(`cmd /c start "" "${image}"`).catch(async () => {
+      await execAsync(`cmd /c start "" ${image}`);
+    });
+    await sleep(1500);
+    const pid = await this.findPID(appName.replace(/\.exe$/i, ''));
+    return { pid };
+  }
+
+  async close(appName: string): Promise<void> {
+    const image = WindowsAdapter.normalizeProcessImageName(appName);
+    await execAsync(`taskkill /IM "${image}" /F`).catch(() => {});
+  }
+
+  async waitForElement(selector: string, timeoutMs = 10000): Promise<UIElement> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const elements = await this.getElements(undefined, 400);
+      const hit = elements.find(
+        (e) =>
+          e.name === selector ||
+          e.id === selector ||
+          e.name?.includes(selector) ||
+          e.id.includes(selector),
+      );
+      if (hit) return hit;
+      await sleep(200);
+    }
+    throw new Error(`waitForElement("${selector}") timed out after ${timeoutMs}ms`);
   }
 
   async disconnect(): Promise<void> {
@@ -61,41 +173,56 @@ export class WindowsAdapter {
    */
   async focus(opts: FocusOptions = {}): Promise<boolean> {
     if (!this.pid) throw new Error('focus(): adapter not connected');
-    const { restore = true, verify = true, timeoutMs = 2500, retries = 1 } = opts;
+    const { restore = true, verify = true, timeoutMs = 2500 } = opts;
 
     if (!this.isProcessAlive(this.pid)) {
       throw new Error(`focus(): process ${this.pid} (${this.appName}) is not running`);
     }
 
     const script = this.buildFocusScript(this.pid, restore);
+    const pid = this.pid;
 
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        await this.runPowerShell(script);
-      } catch (e) {
-        logger.warn('Windows', `focus(): PowerShell failed (attempt ${attempt + 1}): ${e}`);
-      }
-
-      if (!verify) return true;
-      if (await this.waitForForeground(timeoutMs)) {
-        logger.debug('Windows', `focus(): PID ${this.pid} owns foreground`);
-        return true;
-      }
-      if (attempt < retries) {
-        logger.warn('Windows', `focus(): retry ${attempt + 1}/${retries} for PID ${this.pid}`);
-        await sleep(150);
-      }
+    try {
+      await withRetry(
+        async () => {
+          try {
+            await this.runPowerShell(script);
+          } catch (e) {
+            logger.warn('Windows', `focus(): PowerShell failed: ${e}`);
+            throw e instanceof Error ? e : new Error(String(e));
+          }
+          if (verify) {
+            await this.verifyForeground(pid, timeoutMs);
+          }
+        },
+        { attempts: 3, delayMs: 200, backoff: 2 },
+      );
+      logger.debug('Windows', `focus(): PID ${this.pid} owns foreground`);
+      return true;
+    } catch {
+      logger.warn(
+        'Windows',
+        `focus(): PID ${this.pid} (${this.appName}) did not become foreground`,
+      );
+      return false;
     }
+  }
 
-    logger.warn('Windows', `focus(): PID ${this.pid} (${this.appName}) did not become foreground`);
-    return false;
+  async verifyForeground(pid: number, timeoutMs = 2000): Promise<void> {
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const fgPid = await this.getForegroundWindowPid();
+      if (fgPid === pid) return;
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error(`Window with PID ${pid} did not come to foreground within ${timeoutMs}ms`);
   }
 
   /** Cheap O(1) check — true iff the foreground window belongs to our PID. */
   async isFocused(): Promise<boolean> {
     if (!this.pid) return false;
     try {
-      const fgPid = await this.getForegroundPid();
+      const fgPid = await this.getForegroundWindowPid();
       return fgPid === this.pid;
     } catch {
       return false;
@@ -241,17 +368,26 @@ public class DaShow {
     `;
   }
 
-  async click(target: string): Promise<void> {
-    const script = `
-      Add-Type -AssemblyName UIAutomationClient
-      $root = [System.Windows.Automation.AutomationElement]::RootElement
-      $pidCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, ${this.pid})
-      $app = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $pidCond)
-      $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, "${target}")
-      $el = $app.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
-      if ($el) { $el.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke() }
-    `;
-    await this.runPowerShell(script);
+  async click(target: UIElement | string): Promise<void> {
+    if (!this.pid) throw new Error('click(): adapter not connected');
+    const needle = WindowsAdapter.resolveSelector(target);
+    if (!needle) throw new Error('click(): empty selector');
+    const fl = await this.callFlaUiaRpc('uia.click', { pid: this.pid, selector: needle });
+    if (fl !== null) return;
+    await withRetry(
+      async () => {
+        const needleB64 = WindowsAdapter.psUtf8B64(needle);
+        const script = `
+${WINDOWS_UIA_HELPERS_PS1}
+$app = Da-GetAppRoot ${this.pid}
+$needle = Da-DecodeB64 '${needleB64}'
+$el = Da-FindForAction $app $needle
+Da-InvokeClick $el
+`;
+        await this.runPowerShell(script);
+      },
+      { attempts: 3, delayMs: 400, backoff: 2 },
+    );
   }
 
   async clickCoordinates(x: number, y: number): Promise<void> {
@@ -271,41 +407,70 @@ public class MouseOps {
     await this.runPowerShell(script);
   }
 
-  async fill(target: string, value: string): Promise<void> {
-    const script = `
-      Add-Type -AssemblyName UIAutomationClient
-      $root = [System.Windows.Automation.AutomationElement]::RootElement
-      $pidCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, ${this.pid})
-      $app = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $pidCond)
-      $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::AutomationIdProperty, "${target}")
-      $el = $app.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
-      if ($el) { $el.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern).SetValue("${value}") }
-    `;
-    await this.runPowerShell(script);
+  async fill(target: UIElement | string, value: string): Promise<void> {
+    if (!this.pid) throw new Error('fill(): adapter not connected');
+    const needle = WindowsAdapter.resolveSelector(target);
+    if (!needle) throw new Error('fill(): empty selector');
+    const fl = await this.callFlaUiaRpc('uia.fill', { pid: this.pid, selector: needle, value });
+    if (fl !== null) return;
+    await withRetry(
+      async () => {
+        const needleB64 = WindowsAdapter.psUtf8B64(needle);
+        const valueB64 = WindowsAdapter.psUtf8B64(value);
+        const script = `
+${WINDOWS_UIA_HELPERS_PS1}
+$app = Da-GetAppRoot ${this.pid}
+$needle = Da-DecodeB64 '${needleB64}'
+$val = Da-DecodeB64 '${valueB64}'
+$el = Da-FindForAction $app $needle
+Da-SetValue $el $val
+`;
+        await this.runPowerShell(script);
+      },
+      { attempts: 3, delayMs: 400, backoff: 2 },
+    );
   }
 
-  async getText(target: string): Promise<string> {
+  async getText(target: UIElement | string): Promise<string> {
+    if (!this.pid) return '';
+    const needle = WindowsAdapter.resolveSelector(target);
+    if (!needle) return '';
+    const fl = await this.callFlaUiaRpc('uia.get_text', { pid: this.pid, selector: needle });
+    if (fl !== null && typeof fl === 'object' && fl !== null && 'text' in fl) {
+      const t = (fl as { text?: unknown }).text;
+      return t === undefined || t === null ? '' : String(t);
+    }
+    const needleB64 = WindowsAdapter.psUtf8B64(needle);
     const script = `
-      Add-Type -AssemblyName UIAutomationClient
-      $root = [System.Windows.Automation.AutomationElement]::RootElement
-      $pidCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, ${this.pid})
-      $app = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $pidCond)
-      $cond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::NameProperty, "${target}")
-      $el = $app.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
-      if ($el) { $el.Current.Name }
-    `;
-    const { stdout } = await this.runPowerShell(script);
-    return stdout.trim();
+${WINDOWS_UIA_HELPERS_PS1}
+$app = Da-GetAppRoot ${this.pid}
+$needle = Da-DecodeB64 '${needleB64}'
+$el = Da-FindForRead $app $needle
+Write-Output (Da-ReadText $el)
+`;
+    try {
+      const { stdout } = await this.runPowerShell(script);
+      return stdout.trim();
+    } catch {
+      return '';
+    }
   }
 
   async keyPress(key: string): Promise<void> {
-    const keyMap: Record<string, string> = {
-      Enter: '{ENTER}', Tab: '{TAB}', Escape: '{ESC}',
-      Backspace: '{BACKSPACE}', Space: ' ',
-    };
-    const mapped = keyMap[key] ?? key;
-    await this.runPowerShell(
-      `Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait("${mapped}")`
+    if (!this.pid) throw new Error('keyPress(): adapter not connected');
+    await withRetry(
+      async () => {
+        const payload = WindowsAdapter.buildSendKeysPayload(key);
+        const b64 = WindowsAdapter.psUtf8B64(payload);
+        const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Windows.Forms
+$k = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('${b64}'))
+[System.Windows.Forms.SendKeys]::SendWait($k)
+`;
+        await this.runPowerShell(script);
+      },
+      { attempts: 3, delayMs: 400, backoff: 2 },
     );
   }
 
@@ -332,7 +497,6 @@ public class MouseOps {
       $g.Dispose(); $bmp.Dispose()
     `;
     await this.runPowerShell(script);
-    const fs = require('fs');
     const buf = fs.readFileSync(tmp);
     fs.unlinkSync(tmp);
     return buf;
@@ -352,7 +516,7 @@ public class MouseOps {
     if (!this.pid) throw new Error('screenshotWindow(): adapter not connected');
 
     await this.ensureFocused().catch(() => {});
-    await sleep(120);
+    await sleep(300);
 
     const tmp = `${process.env.TEMP || 'C:\\Temp'}\\da-window-${this.pid}-${Date.now()}.png`;
     const script = `
@@ -365,11 +529,15 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 public class DaCap {
-  [DllImport("user32.dll")] public static extern IntPtr GetDC(IntPtr hWnd);
-  [DllImport("user32.dll")] public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
-  [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
 }
 "@ -ReferencedAssemblies System.Drawing
@@ -377,7 +545,26 @@ public class DaCap {
       $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
       if (-not $proc) { exit 1 }
       $hWnd = $proc.MainWindowHandle
+      if ($hWnd -eq [IntPtr]::Zero) {
+        $script:found = [IntPtr]::Zero
+        $cb = [DaCap+EnumWindowsProc] {
+          param($h, $l)
+          $p = [uint32]0
+          [DaCap]::GetWindowThreadProcessId($h, [ref]$p) | Out-Null
+          if ($p -eq [uint32]$targetPid -and [DaCap]::IsWindowVisible($h) -and [DaCap]::GetWindowTextLength($h) -gt 0) {
+            $script:found = $h
+            return $false
+          }
+          return $true
+        }
+        [DaCap]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+        $hWnd = $script:found
+      }
       if ($hWnd -eq [IntPtr]::Zero) { exit 1 }
+
+      [DaCap]::ShowWindow($hWnd, 9) | Out-Null
+      [DaCap]::SetForegroundWindow($hWnd) | Out-Null
+      Start-Sleep -Milliseconds 300
 
       $rect = New-Object DaCap+RECT
       [DaCap]::GetWindowRect($hWnd, [ref]$rect) | Out-Null
@@ -396,7 +583,6 @@ public class DaCap {
 
     try {
       await this.runPowerShell(script);
-      const fs = require('fs');
       const buf = fs.readFileSync(tmp);
       fs.unlinkSync(tmp);
       return buf;
@@ -425,6 +611,11 @@ public class DaCap {
 using System;
 using System.Runtime.InteropServices;
 public class DaBounds {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
   [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
@@ -437,6 +628,21 @@ public class DaBounds {
       $proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
       if (-not $proc) { Write-Output ''; exit 0 }
       $hWnd = $proc.MainWindowHandle
+      if ($hWnd -eq [IntPtr]::Zero) {
+        $script:found = [IntPtr]::Zero
+        $cb = [DaBounds+EnumWindowsProc] {
+          param($h, $l)
+          $p = [uint32]0
+          [DaBounds]::GetWindowThreadProcessId($h, [ref]$p) | Out-Null
+          if ($p -eq [uint32]$targetPid -and [DaBounds]::IsWindowVisible($h) -and [DaBounds]::GetWindowTextLength($h) -gt 0) {
+            $script:found = $h
+            return $false
+          }
+          return $true
+        }
+        [DaBounds]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+        $hWnd = $script:found
+      }
       if ($hWnd -eq [IntPtr]::Zero) { Write-Output ''; exit 0 }
 
       $rect = New-Object DaBounds+RECT
@@ -460,42 +666,129 @@ public class DaBounds {
     }
   }
 
+  /** HWND for the connected process's primary top-level window (0 if unresolved). */
+  async getMainWindowHandle(): Promise<number | null> {
+    if (!this.pid) return null;
+    const script = `
+$ErrorActionPreference = 'SilentlyContinue'
+$targetPid = ${this.pid}
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class DaHwnd {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc enumFunc, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint procId);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern int GetWindowTextLength(IntPtr hWnd);
+}
+"@
+$proc = Get-Process -Id $targetPid -ErrorAction SilentlyContinue
+if (-not $proc) { Write-Output '0'; exit 0 }
+$h = $proc.MainWindowHandle
+if ($h -ne [IntPtr]::Zero) { Write-Output $h.ToInt64(); exit 0 }
+$script:found = 0
+$cb = [DaHwnd+EnumWindowsProc] {
+  param($w, $l)
+  $p = [uint32]0
+  [DaHwnd]::GetWindowThreadProcessId($w, [ref]$p) | Out-Null
+  if ($p -eq [uint32]$targetPid -and [DaHwnd]::IsWindowVisible($w) -and [DaHwnd]::GetWindowTextLength($w) -gt 0) {
+    $script:found = $w.ToInt64()
+    return $false
+  }
+  return $true
+}
+[DaHwnd]::EnumWindows($cb, [IntPtr]::Zero) | Out-Null
+Write-Output $script:found
+`.trim();
+    try {
+      const { stdout } = await this.runPowerShell(script);
+      const v = parseInt(stdout.trim(), 10);
+      if (isNaN(v) || v === 0) return null;
+      return v;
+    } catch {
+      return null;
+    }
+  }
+
+  async getWindowDpiScale(hwnd: number): Promise<number> {
+    const script = `
+$ErrorActionPreference = 'Stop'
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WinDpi {
+  [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hwnd);
+}
+"@
+$d = [WinDpi]::GetDpiForWindow([IntPtr]::new(${hwnd}))
+if ($d -eq 0) { $d = 96 }
+Write-Output $d
+`.trim();
+    try {
+      const { stdout } = await this.runPowerShell(script);
+      const dpi = parseInt(stdout.trim(), 10);
+      if (isNaN(dpi) || dpi <= 0) return 1;
+      return dpi / 96;
+    } catch {
+      return 1;
+    }
+  }
+
   /** Pre-flight focus tailored for vision: ensureFocused + settle delay. */
   async focusForVision(settleMs: number = 150): Promise<void> {
     await this.focus({ restore: true, verify: true, timeoutMs: 2500 });
     if (settleMs > 0) await sleep(settleMs);
   }
 
-  async getElements(): Promise<UIElement[]> {
+  async getElements(appNameOrMax?: string | number, max?: number): Promise<UIElement[]> {
+    let limit = 100;
+    if (typeof appNameOrMax === 'number') {
+      limit = appNameOrMax;
+    } else if (typeof appNameOrMax === 'string') {
+      limit = max ?? 100;
+    } else if (typeof max === 'number') {
+      limit = max;
+    }
+
+    if (!this.pid) return [];
+    const fl = await this.callFlaUiaRpc('uia.get_elements', { pid: this.pid, max: limit });
+    if (Array.isArray(fl)) {
+      try {
+        return this.mapUiaSidecarRowsToElements(fl);
+      } catch (e) {
+        logger.warn('Windows', `getElements FlaUI mapping failed, using PowerShell: ${e}`);
+      }
+    }
     try {
       const script = `
-        Add-Type -AssemblyName UIAutomationClient
-        $root = [System.Windows.Automation.AutomationElement]::RootElement
-        $pidCond = New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, ${this.pid})
-        $app = $root.FindFirst([System.Windows.Automation.TreeScope]::Children, $pidCond)
-        $walker = [System.Windows.Automation.TreeWalker]::RawViewWalker
-        $child = $walker.GetFirstChild($app)
-        $els = @()
-        $count = 0
-        while ($child -ne $null -and $count -lt 50) {
-          $r = $child.Current.BoundingRectangle
-          $els += @{ Id=$child.Current.AutomationId; Name=$child.Current.Name; Type=$child.Current.ControlType.ProgrammaticName; Enabled=$child.Current.IsEnabled; X=$r.X; Y=$r.Y; W=$r.Width; H=$r.Height }
-          $child = $walker.GetNextSibling($child)
-          $count++
-        }
-        $els | ConvertTo-Json -Depth 2
-      `;
+${WINDOWS_UIA_HELPERS_PS1}
+$app = Da-GetAppRoot ${this.pid}
+$rows = @(Da-CollectElements $app ${limit})
+ConvertTo-Json -InputObject $rows -Depth 4 -Compress
+`;
       const { stdout } = await this.runPowerShell(script);
-      const raw = JSON.parse(stdout.trim() || '[]');
+      let raw: unknown;
+      try {
+        raw = JSON.parse(stdout.trim() || '[]');
+      } catch {
+        return [];
+      }
+      if (raw == null) return [];
       const arr = Array.isArray(raw) ? raw : [raw];
       return arr.map((el: any, i: number): UIElement => ({
         id: el.Id || el.Name || `uia-${i}`,
-        role: el.Type ?? 'unknown',
+        role: WindowsAdapter.normalizeUiaRole(el.Type, el.LocalizedType),
         name: el.Name || undefined,
+        value: el.Value || undefined,
         bounds: { x: el.X ?? 0, y: el.Y ?? 0, width: el.W ?? 0, height: el.H ?? 0 },
         isEnabled: el.Enabled !== false,
-        isVisible: true,
-        attributes: { automationId: el.Id },
+        isVisible: el.Offscreen !== true && (el.W ?? 0) > 0 && (el.H ?? 0) > 0,
+        attributes: {
+          automationId: el.Id,
+          className: el.ClassName,
+          localizedType: el.LocalizedType,
+        },
       }));
     } catch {
       return [];
@@ -503,8 +796,26 @@ public class DaBounds {
   }
 
   async isVisible(target: string): Promise<boolean> {
-    const els = await this.getElements();
-    return els.some(el => el.id.includes(target) || el.name?.includes(target));
+    if (!this.pid) return false;
+    const fl = await this.callFlaUiaRpc('uia.is_visible', { pid: this.pid, selector: target });
+    if (fl !== null && typeof fl === 'object' && fl !== null && 'visible' in fl) {
+      return Boolean((fl as { visible?: unknown }).visible);
+    }
+    const needleB64 = WindowsAdapter.psUtf8B64(target);
+    const script = `
+${WINDOWS_UIA_HELPERS_PS1}
+$app = Da-GetAppRoot ${this.pid}
+$needle = Da-DecodeB64 '${needleB64}'
+$el = Da-FindForAction $app $needle
+if (-not $el) { $el = Da-FindLoose $app $needle }
+if (Da-IsReallyVisible $el) { Write-Output '1' } else { Write-Output '0' }
+`;
+    try {
+      const { stdout } = await this.runPowerShell(script);
+      return stdout.trim() === '1';
+    } catch {
+      return false;
+    }
   }
 
   // ────────────────────────────────────────────────────────────────────────
@@ -515,15 +826,17 @@ public class DaBounds {
     const start = Date.now();
     while (Date.now() - start < timeoutMs) {
       try {
-        const fgPid = await this.getForegroundPid();
+        const fgPid = await this.getForegroundWindowPid();
         if (fgPid === this.pid) return true;
-      } catch { /* keep polling */ }
+      } catch {
+        /* keep polling */
+      }
       await sleep(100);
     }
     return false;
   }
 
-  private async getForegroundPid(): Promise<number> {
+  async getForegroundWindowPid(): Promise<number> {
     const script = `
       Add-Type -Namespace DaWin -Name Fg -MemberDefinition @"
 [System.Runtime.InteropServices.DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
@@ -619,22 +932,195 @@ public class DaFocus {
   }
 
   private async findPID(name: string): Promise<number> {
-    const { stdout } = await execAsync(`tasklist /FI "IMAGENAME eq ${name}.exe" /FO CSV /NH`);
+    const image = WindowsAdapter.normalizeProcessImageName(name);
+    const { stdout } = await execAsync(
+      `tasklist /FI "IMAGENAME eq ${image}" /FO CSV /NH`,
+    );
     const match = stdout.match(/"[^"]+","(\d+)"/);
     if (!match) throw new Error(`Process not found: ${name}`);
     return parseInt(match[1], 10);
   }
 
-  /**
-   * Run a PowerShell script via base64-encoded command. Eliminates the
-   * quote-escaping fragility of `powershell -Command "..."` and lets us pass
-   * arbitrarily complex scripts (here-strings, embedded C#, etc.) safely.
-   */
+  /** UTF-8 → base64 for PowerShell `FromBase64String` (avoids quote / `$` injection). */
+  private static psUtf8B64(s: string): string {
+    return Buffer.from(s, 'utf8').toString('base64');
+  }
+
+  private static resolveSelector(target: UIElement | string): string {
+    if (typeof target === 'string') return target;
+    return (target.name ?? target.label ?? target.id ?? '').trim();
+  }
+
+  /** Map UIA `ControlType.Button` style names to shared role strings (e.g. `button`). */
+  private static normalizeUiaRole(programmaticName: string, localizedType?: string): string {
+    const raw = (programmaticName || '').trim();
+    if (!raw) {
+      const loc = (localizedType || '').trim().toLowerCase();
+      return loc || 'unknown';
+    }
+    const stripped = raw.replace(/^ControlType\./i, '');
+    return stripped.toLowerCase();
+  }
+
+  private static normalizeProcessImageName(name: string): string {
+    const t = name.trim();
+    return t.toLowerCase().endsWith('.exe') ? t : `${t}.exe`;
+  }
+
+  /** Map logical key names and escape SendKeys metacharacters for arbitrary text. */
+  private static buildSendKeysPayload(key: string): string {
+    const named: Record<string, string> = {
+      Enter: '{ENTER}',
+      Tab: '{TAB}',
+      Escape: '{ESC}',
+      Backspace: '{BACKSPACE}',
+      Space: ' ',
+    };
+    if (named[key]) return named[key];
+    return [...key].map((c) => WindowsAdapter.sendKeysEscapeChar(c)).join('');
+  }
+
+  private static sendKeysEscapeChar(ch: string): string {
+    if (ch === '{') return '{{}';
+    if (ch === '}') return '{}}';
+    if ('+^%~()[]'.includes(ch)) return `{${ch}}`;
+    return ch;
+  }
+
+
   private runPowerShell(script: string): Promise<{ stdout: string }> {
-    const encoded = Buffer.from(script, 'utf16le').toString('base64');
-    return execAsync(
-      `powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encoded}`,
-      { maxBuffer: 1024 * 1024 * 16 },
-    );
+    return runEncodedPowerShell(script);
+  }
+
+  /**
+   * Optional FlaUI path: same `OfficeInterop.exe` sidecar, `uia.*` RPC on an STA FlaUI thread.
+   * When the executable is missing or the RPC fails, returns `null` so callers fall back to PowerShell UIA.
+   */
+  private async callFlaUiaRpc(
+    method: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown | null> {
+    const { getSidecar, isSidecarExecutablePresent } = await loadDotNetBridge();
+    if (!isSidecarExecutablePresent()) return null;
+    try {
+      return await getSidecar().call(method, args);
+    } catch (e) {
+      logger.warn('Windows', `${method} (FlaUI sidecar) failed: ${e}`);
+      return null;
+    }
+  }
+
+  private mapUiaSidecarRowsToElements(rows: unknown[]): UIElement[] {
+    return rows.map((row: unknown, i: number): UIElement => {
+      const r = row as Record<string, unknown>;
+      const pick = (camel: string, pascal: string) => r[camel] ?? r[pascal];
+      const str = (camel: string, pascal: string): string | undefined => {
+        const v = pick(camel, pascal);
+        if (v === undefined || v === null) return undefined;
+        return String(v);
+      };
+      const num = (camel: string, pascal: string, def: number): number => {
+        const v = pick(camel, pascal);
+        if (typeof v === 'number' && !Number.isNaN(v)) return v;
+        if (typeof v === 'string') {
+          const n = parseFloat(v);
+          if (!Number.isNaN(n)) return n;
+        }
+        return def;
+      };
+      const bool = (camel: string, pascal: string, def: boolean): boolean => {
+        const v = pick(camel, pascal);
+        return typeof v === 'boolean' ? v : def;
+      };
+      const id = str('id', 'Id') ?? '';
+      const name = str('name', 'Name');
+      const type = str('type', 'Type') ?? '';
+      const localizedType = str('localizedType', 'LocalizedType');
+      const value = str('value', 'Value');
+      const className = str('className', 'ClassName');
+      const x = num('x', 'X', 0);
+      const y = num('y', 'Y', 0);
+      const w = num('w', 'W', 0);
+      const h = num('h', 'H', 0);
+      const enabled = bool('enabled', 'Enabled', true);
+      const offscreen = bool('offscreen', 'Offscreen', false);
+      return {
+        id: id || name || `uia-${i}`,
+        role: WindowsAdapter.normalizeUiaRole(type, localizedType),
+        name: name || undefined,
+        value: value || undefined,
+        bounds: { x, y, width: w, height: h },
+        isEnabled: enabled !== false,
+        isVisible: offscreen !== true && w > 0 && h > 0,
+        attributes: {
+          automationId: id || undefined,
+          className: className || undefined,
+          localizedType: localizedType || undefined,
+        },
+      };
+    });
+  }
+
+  // ─── Sidecar-powered extensions ──────────────────────────────────────────────
+  // These methods are additive — they do NOT replace existing UIA/PS methods.
+  // Imported lazily so the sidecar module is never loaded on macOS.
+
+  private async sidecar() {
+    const { getSidecar } = await loadDotNetBridge();
+    return getSidecar();
+  }
+
+  async excelReadCell(file: string, cell: string): Promise<string> {
+    const result = await (await this.sidecar()).call('excel.read_cell', { file, cell });
+    return (result as { value: string }).value;
+  }
+
+  async excelWriteCell(file: string, cell: string, value: string): Promise<void> {
+    await (await this.sidecar()).call('excel.write_cell', { file, cell, value });
+  }
+
+  async excelReadRange(file: string, range: string): Promise<string[][]> {
+    const result = await (await this.sidecar()).call('excel.read_range', { file, range });
+    return (result as { rows: string[][] }).rows;
+  }
+
+  async excelRunMacro(file: string, macro: string): Promise<void> {
+    await (await this.sidecar()).call('excel.run_macro', { file, macro });
+  }
+
+  async wordInsertText(file: string, bookmark: string, text: string): Promise<void> {
+    await (await this.sidecar()).call('word.insert_text', { file, bookmark, text });
+  }
+
+  async wordExportPdf(file: string, outputPath: string): Promise<void> {
+    await (await this.sidecar()).call('word.export_pdf', { file, output: outputPath });
+  }
+
+  async outlookSendEmail(
+    graphCreds: { tenantId: string; clientId: string; clientSecret: string },
+    to: string,
+    subject: string,
+    body: string,
+  ): Promise<void> {
+    await (await this.sidecar()).call('outlook.send_email', { ...graphCreds, to, subject, body });
+  }
+
+  async outlookListInbox(
+    graphCreds: { tenantId: string; clientId: string; clientSecret: string },
+    top = 10,
+  ): Promise<Array<{ subject: string; from: string; received: string; isRead: boolean }>> {
+    const result = await (await this.sidecar()).call('outlook.list_inbox', { ...graphCreds, top });
+    return (result as {
+      messages: Array<{ subject: string; from: string; received: string; isRead: boolean }>;
+    }).messages;
+  }
+
+  async secretsSave(name: string, value: string): Promise<void> {
+    await (await this.sidecar()).call('secrets.encrypt', { name, value });
+  }
+
+  async secretsLoad(name: string): Promise<string> {
+    const result = await (await this.sidecar()).call('secrets.decrypt', { name });
+    return (result as { value: string }).value;
   }
 }
