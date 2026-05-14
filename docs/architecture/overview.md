@@ -8,14 +8,14 @@ This document is the **top-level map** of the repository: what exists at each la
 
 ## Table of contents
 
-| # | Section |
-|---|--------|
-| 1 | [One-sentence mental model](#1-one-sentence-mental-model) |
-| 2 | [Layered architecture](#2-layered-architecture-who-sits-where) |
-| 3 | [End-to-end execution flow](#3-end-to-end-execution-flow) |
-| 4–12 | Core contracts, POM, LLM systems, config, porting, source map |
+| #      | Section                                                                                                                        |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1      | [One-sentence mental model](#1-one-sentence-mental-model)                                                                      |
+| 2      | [Layered architecture](#2-layered-architecture-who-sits-where)                                                                 |
+| 3      | [End-to-end execution flow](#3-end-to-end-execution-flow)                                                                      |
+| 4–12   | Core contracts, POM, LLM systems, config, porting, source map                                                                  |
 | **13** | [**Platform runtime architectures (deep dive)**](#13-platform-runtime-architectures-deep-dive) — browser, desktop, mobile, API |
-| 14 | [Glossary](#14-glossary) |
+| 14     | [Glossary](#14-glossary)                                                                                                       |
 
 ---
 
@@ -81,7 +81,7 @@ flowchart TB
 ├─────────────────────────────────────────────────────────────────────────┤
 │  Platform adapters / browser internals                                    │
 │       macOS: AppleScript + System Events / JXA-style element dump         │
-│       Windows: UIA / PowerShell side (see windows-adapter)                │
+│       Windows: UIA / PowerShell + optional .NET sidecar (Office Graph)   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  src/pom/                                                                 │
 │       ElementRef        Lazy actions: click/fill/wait on selector         │
@@ -125,7 +125,7 @@ npx playwright test --project=desktop-macos
 2. It calls **`loadAllEnv()`** from **`src/core/env-loader.ts`**, which merges:
    - `.env` (common)
    - then `browser.env`, `api.env`, `desktop.env`, `mobile.env` if present  
-   **Rule:** variables already set in the shell are **not** overwritten by files (shell wins).
+     **Rule:** variables already set in the shell are **not** overwritten by files (shell wins).
 
 ### 3.3 Playwright selects a **project**
 
@@ -172,12 +172,12 @@ sequenceDiagram
 
 **Cause → effect (fixture):**
 
-| You do | What happens |
-|--------|----------------|
-| Name file `foo.desktop.spec.ts` | Matched by desktop projects only |
-| Add `@app=Calculator` in test title | Desktop launch targets that app name |
-| Add `@platform=macos` in title | Forces platform even if project name is ambiguous |
-| Omit `@app` and `DESKTOP_APP_NAME` | Desktop launch may be skipped (`shouldLaunch = false`) |
+| You do                              | What happens                                           |
+| ----------------------------------- | ------------------------------------------------------ |
+| Name file `foo.desktop.spec.ts`     | Matched by desktop projects only                       |
+| Add `@app=Calculator` in test title | Desktop launch targets that app name                   |
+| Add `@platform=macos` in title      | Forces platform even if project name is ambiguous      |
+| Omit `@app` and `DESKTOP_APP_NAME`  | Desktop launch may be skipped (`shouldLaunch = false`) |
 
 ---
 
@@ -202,10 +202,10 @@ Every platform driver implements the same methods: **`click`**, **`fill`**, **`g
 
 **Cause → effect (vision):**
 
-| Condition | `app` at runtime |
-|-----------|------------------|
+| Condition                            | `app` at runtime                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------ |
 | `OPENAI_API_KEY` set, vision enabled | Often **`VisionDriverWrapper`** (cast may be needed for `getVisionProvider()`) |
-| No key or vision disabled | Raw **`BrowserDriver`** / **`DesktopDriver`** / … |
+| No key or vision disabled            | Raw **`BrowserDriver`** / **`DesktopDriver`** / …                              |
 
 **Important:** Vision here is for **finding elements / describing screens from pixels**, not the same subsystem as **LLM JSON judge** on **`DriverPage`** (see §7).
 
@@ -256,10 +256,10 @@ Every platform driver implements the same methods: **`click`**, **`fill`**, **`g
 
 ## 7. Two different “LLM” systems (do not confuse them)
 
-| Feature | Purpose | Config | Typical use |
-|--------|---------|--------|-------------|
-| **VisionProvider** + **VisionDriverWrapper** | When **structural** `click`/`fill` fails, use **screenshot + vision** to get coordinates | Primarily **`OPENAI_API_KEY`** (see `VisionProvider`) | Stable selectors missing; visual locate |
-| **DriverPage** `judgeWithLLM` / `judgeJson` | **Assert / classify** structured outcomes (e.g. “does this calculator output match expectation?”) | **`LLM_PROVIDER`**, **`LLM_MODEL`**, **`OPENAI_API_KEY` or `GEMINI_API_KEY`**, optional **`LLM_BASE_URL`** | LLM-as-judge, scoring, fuzzy equality |
+| Feature                                      | Purpose                                                                                           | Config                                                                                                     | Typical use                             |
+| -------------------------------------------- | ------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **VisionProvider** + **VisionDriverWrapper** | When **structural** `click`/`fill` fails, use **screenshot + vision** to get coordinates          | Primarily **`OPENAI_API_KEY`** (see `VisionProvider`)                                                      | Stable selectors missing; visual locate |
+| **DriverPage** `judgeWithLLM` / `judgeJson`  | **Assert / classify** structured outcomes (e.g. “does this calculator output match expectation?”) | **`LLM_PROVIDER`**, **`LLM_MODEL`**, **`OPENAI_API_KEY` or `GEMINI_API_KEY`**, optional **`LLM_BASE_URL`** | LLM-as-judge, scoring, fuzzy equality   |
 
 They can both use OpenAI-compatible APIs, but **different env vars and different call sites**.
 
@@ -283,11 +283,11 @@ Priority logic:
 
 **Models / endpoints:**
 
-| Provider | API key env | Default model | SDK |
-|----------|-------------|---------------|-----|
-| OpenAI | `OPENAI_API_KEY` | `gpt-4o-mini` | `openai` npm package |
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` | `@anthropic-ai/sdk` |
-| Gemini | `GEMINI_API_KEY` | `gemini-2.0-flash` | `@google/genai` |
+| Provider  | API key env         | Default model              | SDK                  |
+| --------- | ------------------- | -------------------------- | -------------------- |
+| OpenAI    | `OPENAI_API_KEY`    | `gpt-4o-mini`              | `openai` npm package |
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-20250514` | `@anthropic-ai/sdk`  |
+| Gemini    | `GEMINI_API_KEY`    | `gemini-2.0-flash`         | `@google/genai`      |
 
 Override model: **`LLM_MODEL`**.  
 Override base URL (OpenAI-compatible only): **`LLM_BASE_URL`**.
@@ -313,37 +313,37 @@ Load order:
 
 **Cause → effect:**
 
-| File / variable | Effect |
-|-----------------|--------|
-| `DESKTOP_APP_NAME` | Default desktop app when test has no `@app=` |
+| File / variable                                  | Effect                                                           |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `DESKTOP_APP_NAME`                               | Default desktop app when test has no `@app=`                     |
 | `metadata.desktop.windowState` / `@windowState=` | Initial desktop window state (`normal`/`maximized`/`fullscreen`) |
-| `BROWSER_BASE_URL` / `BASE_URL` | Browser navigation target |
-| `API_BASE_URL` | API driver base URL |
-| `TIMEOUT`, `RETRIES` | Playwright timeout / retries |
+| `BROWSER_BASE_URL` / `BASE_URL`                  | Browser navigation target                                        |
+| `API_BASE_URL`                                   | API driver base URL                                              |
+| `TIMEOUT`, `RETRIES`                             | Playwright timeout / retries                                     |
 
 ---
 
 ## 9. Scripts and tooling
 
-| Command | Role |
-|---------|------|
-| `npm run build` | TypeScript compile to `dist/` |
-| `npm test` | All Playwright projects that match files |
-| `npm run pom:gen` | `scripts/generate-pom.ts` — scaffold POM (browser DOM, desktop AX/XML/API) |
+| Command              | Role                                                                                             |
+| -------------------- | ------------------------------------------------------------------------------------------------ |
+| `npm run build`      | TypeScript compile to `dist/`                                                                    |
+| `npm test`           | All Playwright projects that match files                                                         |
+| `npm run pom:gen`    | `scripts/generate-pom.ts` — scaffold POM (browser DOM, desktop AX/XML/API)                       |
 | MCP `desktop-bridge` | Separate automation surface using same `VisionProvider` / scanning (see `mcp/desktop-bridge.ts`) |
 
 ---
 
 ## 10. How to add a feature “the right way”
 
-| Goal | Where to change |
-|------|------------------|
-| New **browser** flow | Prefer **`app`** + POM **`extends DriverPage`**; for Playwright **`Locator`** POMs use **`extends PageObject`** with **`pages.current()`**; optional **`network`** fixture for HTTP capture |
-| New **desktop** flow | POM extends **`DesktopPage`**; test `*.desktop.spec.ts`; tag `@app=...` |
-| New **API** contract | `*.api.spec.ts`; use **`api`** fixture or `app` as `APIDriver` per project |
-| Reusable **LLM assertion** | Add **`protected`** helper on **`DriverPage`** or thin **`LlmJudge`** module imported by `DriverPage` |
-| Faster desktop **selectors** | Improve **`getElements`** mapping in adapter or use generated POM from scan |
-| Turn off vision globally | Pass `vision: { enabled: false }` in factory config (requires wiring from project metadata today if you need per-project control) |
+| Goal                         | Where to change                                                                                                                                                                             |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New **browser** flow         | Prefer **`app`** + POM **`extends DriverPage`**; for Playwright **`Locator`** POMs use **`extends PageObject`** with **`pages.current()`**; optional **`network`** fixture for HTTP capture |
+| New **desktop** flow         | POM extends **`DesktopPage`**; test `*.desktop.spec.ts`; tag `@app=...`                                                                                                                     |
+| New **API** contract         | `*.api.spec.ts`; use **`api`** fixture or `app` as `APIDriver` per project                                                                                                                  |
+| Reusable **LLM assertion**   | Add **`protected`** helper on **`DriverPage`** or thin **`LlmJudge`** module imported by `DriverPage`                                                                                       |
+| Faster desktop **selectors** | Improve **`getElements`** mapping in adapter or use generated POM from scan                                                                                                                 |
+| Turn off vision globally     | Pass `vision: { enabled: false }` in factory config (requires wiring from project metadata today if you need per-project control)                                                           |
 
 ---
 
@@ -360,13 +360,13 @@ Use this section when copying ideas into **JUnit + Appium**, **Pytest + Playwrig
 
 ### 11.2 Map framework pieces
 
-| Desktop Agent | Your target framework |
-|---------------|------------------------|
-| `playwright.config.ts` projects | Gradle profiles / pytest markers / Cypress env |
-| `test.extend({ app })` | JUnit `@BeforeEach` / pytest fixture / `beforeEach` |
-| `DriverFactory` | `DriverResolver` / `TestApp` factory |
-| `VisionDriverWrapper` | Decorator around `WebDriver` / `Page` |
-| `DriverPage.judgeJson` | Small service class: `LlmClient.complete(prompt) → JSON` |
+| Desktop Agent                   | Your target framework                                    |
+| ------------------------------- | -------------------------------------------------------- |
+| `playwright.config.ts` projects | Gradle profiles / pytest markers / Cypress env           |
+| `test.extend({ app })`          | JUnit `@BeforeEach` / pytest fixture / `beforeEach`      |
+| `DriverFactory`                 | `DriverResolver` / `TestApp` factory                     |
+| `VisionDriverWrapper`           | Decorator around `WebDriver` / `Page`                    |
+| `DriverPage.judgeJson`          | Small service class: `LlmClient.complete(prompt) → JSON` |
 
 ### 11.3 Environment strategy to copy
 
@@ -384,37 +384,37 @@ Use this section when copying ideas into **JUnit + Appium**, **Pytest + Playwrig
 
 ## 12. Source file map (quick lookup)
 
-| Path | Responsibility |
-|------|----------------|
-| `src/core/types.ts` | `Platform`, `UIElement`, `LaunchOptions`, … |
-| `src/core/config.ts` | `FrameworkConfig` |
-| `src/core/env-loader.ts` | Layered `.env` loading + typed accessors |
-| `src/core/driver-factory.ts` | Creates driver + optional vision wrapper |
-| `src/fixtures/index.ts` | Playwright fixtures |
-| `src/drivers/browser/browser-driver.ts` | Playwright-backed `IDriver` |
-| `src/drivers/browser/pom/dom-scanner.ts` | In-page DOM scan for POM generation |
-| `src/drivers/browser/pom/selector-strategy.ts` | Ranked selector heuristics for generated locators |
-| `src/drivers/browser/pom/pom-generator.ts` | Optional `PageObject` / region-grouped codegen |
-| `src/drivers/browser/network/network-monitor.ts` | Attach to `Page`; collect requests/responses |
-| `src/drivers/browser/network/network-reporter.ts` | Playwright reporter: console network summary |
-| `src/drivers/desktop/desktop-driver.ts` | Desktop `IDriver` façade |
-| `src/drivers/desktop/macos-adapter.ts` | macOS implementation details |
-| `src/drivers/desktop/windows-adapter.ts` | Windows implementation details |
-| `src/vision/vision-context.ts` | PID-anchored vision capture context + coordinate translation |
-| `src/utils/image.ts` | PNG dimension reader used for scale-aware vision mapping |
-| `src/pom/driver-page.ts` | **Shared POM base + LLM judge + eval pipeline** |
-| `src/pom/element-ref.ts` | Lazy element actions |
-| `src/eval/types.ts` | `EvalLabel`, `JudgeRequest`, `AlignmentEntry`, `LlmConfig` |
-| `src/eval/llm-provider.ts` | **`LlmProvider` interface + OpenAI/Anthropic/Gemini** |
-| `src/eval/judge.ts` | `LlmJudge` — prompt builder + JSON response parser |
-| `src/eval/rule-based.ts` | Deterministic evaluators (JSON, domain, pattern, word count) |
-| `src/eval/eval-runner.ts` | `EvalRunner` — alignment, bootstrap, self-consistency |
-| `src/vision/*` | Screenshot + vision fallback |
-| `mcp/desktop-bridge.ts` | MCP server — desktop bridge (7 tools) |
-| `scripts/generate-pom.ts` | CLI POM generator (4 platforms) |
-| `tests/pom/**` | Application page objects |
-| `tests/*.spec.ts` | Tests by filename convention |
-| `playwright.config.ts` | Projects + env bootstrap |
+| Path                                              | Responsibility                                                        |
+| ------------------------------------------------- | --------------------------------------------------------------------- |
+| `src/core/types.ts`                               | `Platform`, `UIElement`, `LaunchOptions`, …                           |
+| `src/core/config.ts`                              | `FrameworkConfig`                                                     |
+| `src/core/env-loader.ts`                          | Layered `.env` loading + typed accessors                              |
+| `src/core/driver-factory.ts`                      | Creates driver + optional vision wrapper                              |
+| `src/fixtures/index.ts`                           | Playwright fixtures                                                   |
+| `src/drivers/browser/browser-driver.ts`           | Playwright-backed `IDriver`                                           |
+| `src/drivers/browser/pom/dom-scanner.ts`          | In-page DOM scan for POM generation                                   |
+| `src/drivers/browser/pom/selector-strategy.ts`    | Ranked selector heuristics for generated locators                     |
+| `src/drivers/browser/pom/pom-generator.ts`        | Optional `PageObject` / region-grouped codegen                        |
+| `src/drivers/browser/network/network-monitor.ts`  | Attach to `Page`; collect requests/responses                          |
+| `src/drivers/browser/network/network-reporter.ts` | Playwright reporter: console network summary                          |
+| `src/drivers/desktop/desktop-driver.ts`           | Desktop `IDriver` façade                                              |
+| `src/drivers/desktop/macos-adapter.ts`            | macOS implementation details                                          |
+| `src/drivers/desktop/windows-adapter.ts`          | Windows implementation details                                        |
+| `src/vision/vision-context.ts`                    | PID-anchored vision capture context + coordinate translation          |
+| `src/utils/image.ts`                              | PNG dimension reader used for scale-aware vision mapping              |
+| `src/pom/driver-page.ts`                          | **Shared POM base + LLM judge + eval pipeline**                       |
+| `src/pom/element-ref.ts`                          | Lazy element actions                                                  |
+| `src/eval/types.ts`                               | `EvalLabel`, `JudgeRequest`, `AlignmentEntry`, `LlmConfig`            |
+| `src/eval/llm-provider.ts`                        | **`LlmProvider` interface + OpenAI/Anthropic/Gemini**                 |
+| `src/eval/judge.ts`                               | `LlmJudge` — prompt builder + JSON response parser                    |
+| `src/eval/rule-based.ts`                          | Deterministic evaluators (JSON, domain, pattern, word count)          |
+| `src/eval/eval-runner.ts`                         | `EvalRunner` — alignment, bootstrap, self-consistency                 |
+| `src/vision/*`                                    | Screenshot + vision fallback                                          |
+| `mcp/desktop-bridge.ts`                           | MCP server — desktop bridge (UI tools + optional Office/secret tools) |
+| `scripts/generate-pom.ts`                         | CLI POM generator (4 platforms)                                       |
+| `tests/pom/**`                                    | Application page objects                                              |
+| `tests/*.spec.ts`                                 | Tests by filename convention                                          |
+| `playwright.config.ts`                            | Projects + env bootstrap                                              |
 
 ---
 
@@ -473,6 +473,9 @@ flowchart TB
     MAC[MacOSAdapter — AppleScript / System Events / AX]
     WIN[WindowsAdapter — UIA / PowerShell bridge]
   end
+  subgraph sidecar [Optional — Windows only]
+    DOT[DotNetBridge → OfficeInterop.exe — Office Graph DPAPI]
+  end
   subgraph os [OS]
     M[macOS app]
     W[Windows app]
@@ -481,6 +484,7 @@ flowchart TB
   DD -->|platform windows| WIN
   MAC --> M
   WIN --> W
+  WIN -. lazy stdio .-> DOT
   subgraph desktoppom [POM]
     DP[DesktopPage extends DriverPage]
     DB[DesktopBlock / AX mapping]
@@ -488,11 +492,11 @@ flowchart TB
   DD --> DP
 ```
 
-**Key files:** `src/drivers/desktop/desktop-driver.ts`, `macos-adapter.ts`, `windows-adapter.ts`, `drivers/desktop/pom/*`.
+**Key files:** `src/drivers/desktop/desktop-driver.ts`, `macos-adapter.ts`, `windows-adapter.ts`, `dotnet-bridge.ts`, `sidecar/OfficeInterop/*`, `drivers/desktop/pom/*`.
 
 **Projects:** `desktop-macos` vs `desktop-windows` select host OS; same `*.desktop.spec.ts` pattern, different `metadata.platform`.
 
-**Docs:** [macOS](../desktop/macos.md), [Windows](../desktop/windows.md), [Desktop bridge MCP](../desktop/mcp-bridge.md). **Architecture intro:** [Desktop stack](./desktop.md).
+**Docs:** [macOS](../desktop/macos.md), [Windows](../desktop/windows.md), [Windows from zero](../desktop/windows-automation-from-zero.md), [.NET sidecar](../desktop/dotnet-sidecar.md), [Desktop bridge MCP](../desktop/mcp-bridge.md). **Architecture intro:** [Desktop stack](./desktop.md).
 
 ---
 
@@ -562,14 +566,14 @@ flowchart LR
 
 ## 14. Glossary
 
-| Term | Meaning |
-|------|---------|
-| **Project** | Named Playwright profile: which tests run and with what `metadata` |
-| **Fixture `app`** | The `IDriver` instance for that test |
-| **Adapter** | Platform-specific code behind `DesktopDriver` |
-| **Vision wrapper** | Decorator driver that adds screenshot-based recovery |
-| **LLM judge** | Chat completion used to compare expected vs observed **text/state** |
+| Term               | Meaning                                                             |
+| ------------------ | ------------------------------------------------------------------- |
+| **Project**        | Named Playwright profile: which tests run and with what `metadata`  |
+| **Fixture `app`**  | The `IDriver` instance for that test                                |
+| **Adapter**        | Platform-specific code behind `DesktopDriver`                       |
+| **Vision wrapper** | Decorator driver that adds screenshot-based recovery                |
+| **LLM judge**      | Chat completion used to compare expected vs observed **text/state** |
 
 ---
 
-*This document is the canonical “big picture” for Desktop Agent. For the documentation index, see [docs/README.md](../README.md). For shared concepts, see [Fixtures & `IDriver`](../common/fixtures-and-idriver.md).*
+_This document is the canonical “big picture” for Desktop Agent. For the documentation index, see [docs/README.md](../README.md). For shared concepts, see [Fixtures & `IDriver`](../common/fixtures-and-idriver.md)._

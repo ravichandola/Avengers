@@ -963,4 +963,67 @@ public class DaFocus {
   private runPowerShell(script: string): Promise<{ stdout: string }> {
     return runEncodedPowerShell(script);
   }
+
+  // ─── Sidecar-powered extensions ──────────────────────────────────────────────
+  // These methods are additive — they do NOT replace existing UIA/PS methods.
+  // Imported lazily so the sidecar module is never loaded on macOS.
+
+  private async sidecar() {
+    const { getSidecar } = await import('./dotnet-bridge');
+    return getSidecar();
+  }
+
+  async excelReadCell(file: string, cell: string): Promise<string> {
+    const result = await (await this.sidecar()).call('excel.read_cell', { file, cell });
+    return (result as { value: string }).value;
+  }
+
+  async excelWriteCell(file: string, cell: string, value: string): Promise<void> {
+    await (await this.sidecar()).call('excel.write_cell', { file, cell, value });
+  }
+
+  async excelReadRange(file: string, range: string): Promise<string[][]> {
+    const result = await (await this.sidecar()).call('excel.read_range', { file, range });
+    return (result as { rows: string[][] }).rows;
+  }
+
+  async excelRunMacro(file: string, macro: string): Promise<void> {
+    await (await this.sidecar()).call('excel.run_macro', { file, macro });
+  }
+
+  async wordInsertText(file: string, bookmark: string, text: string): Promise<void> {
+    await (await this.sidecar()).call('word.insert_text', { file, bookmark, text });
+  }
+
+  async wordExportPdf(file: string, outputPath: string): Promise<void> {
+    await (await this.sidecar()).call('word.export_pdf', { file, output: outputPath });
+  }
+
+  async outlookSendEmail(
+    graphCreds: { tenantId: string; clientId: string; clientSecret: string },
+    to: string,
+    subject: string,
+    body: string,
+  ): Promise<void> {
+    await (await this.sidecar()).call('outlook.send_email', { ...graphCreds, to, subject, body });
+  }
+
+  async outlookListInbox(
+    graphCreds: { tenantId: string; clientId: string; clientSecret: string },
+    top = 10,
+  ): Promise<Array<{ subject: string; from: string; received: string; isRead: boolean }>> {
+    const result = await (await this.sidecar()).call('outlook.list_inbox', { ...graphCreds, top });
+    return (result as {
+      messages: Array<{ subject: string; from: string; received: string; isRead: boolean }>;
+    }).messages;
+  }
+
+  async secretsSave(name: string, value: string): Promise<void> {
+    await (await this.sidecar()).call('secrets.encrypt', { name, value });
+  }
+
+  async secretsLoad(name: string): Promise<string> {
+    const result = await (await this.sidecar()).call('secrets.decrypt', { name });
+    return (result as { value: string }).value;
+  }
 }

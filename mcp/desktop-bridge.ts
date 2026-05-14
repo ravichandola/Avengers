@@ -539,6 +539,75 @@ server.tool(
   },
 );
 
+// ─── Tool 8: office_action ────────────────────────────────────────────────────
+server.tool(
+  'office_action',
+  'Run an Office automation action (Excel read/write, Word export, Outlook send) via the .NET sidecar. Only available on Windows with sidecar built.',
+  {
+    action: z
+      .enum([
+        'excel.read_cell',
+        'excel.write_cell',
+        'excel.read_range',
+        'excel.run_macro',
+        'word.insert_text',
+        'word.export_pdf',
+        'outlook.send_email',
+        'outlook.list_inbox',
+      ])
+      .describe('The Office action to perform'),
+    args: z.record(z.string(), z.unknown()).describe('Action-specific arguments (file, cell, value, etc.)'),
+  },
+  async ({ action, args }) => {
+    try {
+      if (process.platform !== 'win32') {
+        return {
+          content: [{ type: 'text' as const, text: 'office_action is Windows-only.' }],
+          isError: true,
+        };
+      }
+      const { getSidecar } = await import('../src/drivers/desktop/dotnet-bridge');
+      const result = await getSidecar().call(action, args as Record<string, unknown>);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    } catch (err) {
+      return { content: [{ type: 'text' as const, text: `Error: ${err}` }], isError: true };
+    }
+  },
+);
+
+// ─── Tool 9: manage_secret ────────────────────────────────────────────────────
+server.tool(
+  'manage_secret',
+  'Store or retrieve an encrypted secret using Windows DPAPI. Secrets are user-scoped and never stored in plaintext. Only available on Windows with sidecar built.',
+  {
+    operation: z.enum(['save', 'load']).describe('"save" encrypts and stores, "load" retrieves'),
+    name: z.string().describe('Secret name key (e.g. "openai-api-key")'),
+    value: z.string().optional().describe('The secret value (required for save)'),
+  },
+  async ({ operation, name, value }) => {
+    try {
+      if (process.platform !== 'win32') {
+        return {
+          content: [{ type: 'text' as const, text: 'manage_secret is Windows-only.' }],
+          isError: true,
+        };
+      }
+      const { getSidecar } = await import('../src/drivers/desktop/dotnet-bridge');
+      const sidecar = getSidecar();
+      if (operation === 'save') {
+        if (!value) throw new Error('"value" is required for save operation');
+        await sidecar.call('secrets.encrypt', { name, value });
+        return { content: [{ type: 'text' as const, text: `Secret "${name}" stored securely.` }] };
+      } else {
+        const result = (await sidecar.call('secrets.decrypt', { name })) as { value: string };
+        return { content: [{ type: 'text' as const, text: result.value }] };
+      }
+    } catch (err) {
+      return { content: [{ type: 'text' as const, text: `Error: ${err}` }], isError: true };
+    }
+  },
+);
+
 // ---------------------------------------------------------------------------
 // Start
 // ---------------------------------------------------------------------------
