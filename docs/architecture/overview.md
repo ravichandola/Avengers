@@ -81,7 +81,7 @@ flowchart TB
 ├─────────────────────────────────────────────────────────────────────────┤
 │  Platform adapters / browser internals                                    │
 │       macOS: AppleScript + System Events / JXA-style element dump         │
-│       Windows: UIA / PowerShell + optional .NET sidecar (Office Graph)   │
+│       Windows: FlaUI (optional sidecar) / PowerShell UIA + optional Office Graph DPAPI   │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  src/pom/                                                                 │
 │       ElementRef        Lazy actions: click/fill/wait on selector         │
@@ -471,10 +471,10 @@ flowchart TB
   end
   subgraph adapters [Platform adapters]
     MAC[MacOSAdapter — AppleScript / System Events / AX]
-    WIN[WindowsAdapter — UIA / PowerShell bridge]
+    WIN[WindowsAdapter — FlaUI RPC or PowerShell UIA]
   end
   subgraph sidecar [Optional — Windows only]
-    DOT[DotNetBridge → OfficeInterop.exe — Office Graph DPAPI]
+    DOT[DotNetBridge → OfficeInterop.exe — FlaUI uia.* + Office Graph DPAPI]
   end
   subgraph os [OS]
     M[macOS app]

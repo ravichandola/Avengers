@@ -22,9 +22,9 @@
     "test:api": "npx playwright test --project=api",
     "test:all-browsers": "npx playwright test --project=chrome --project=firefox --project=webkit",
     "pom:gen": "ts-node --project scripts/tsconfig.json scripts/generate-pom.ts",
-    "sidecar:build": "dotnet publish sidecar/OfficeInterop/OfficeInterop.csproj -c Release -p:SelfContained=false",
-    "sidecar:clean": "dotnet clean sidecar/OfficeInterop/OfficeInterop.csproj",
-    "sidecar:ping": "dotnet run --project sidecar/OfficeInterop/OfficeInterop.csproj"
+    "sidecar:build": "node scripts/sidecar-dotnet.mjs build",
+    "sidecar:clean": "node scripts/sidecar-dotnet.mjs clean",
+    "sidecar:ping": "node scripts/sidecar-dotnet.mjs ping"
   },
   "keywords": [
     "automation",

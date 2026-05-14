@@ -29,7 +29,7 @@ flowchart TB
     WIN[WindowsAdapter]
   end
   subgraph optional [Optional — Windows only]
-    DOT[dotnet-bridge.ts + OfficeInterop.exe]
+    DOT[dotnet-bridge → OfficeInterop.exe — FlaUI UIA + Office Graph DPAPI]
   end
   PW --> FX
   SPEC --> FX
@@ -38,7 +38,7 @@ flowchart TB
   DF --> DD
   DD -->|platform macos| MAC
   DD -->|platform windows| WIN
-  WIN -. Office Graph DPAPI .-> DOT
+  WIN -. FlaUI uia.* + Office Graph DPAPI .-> DOT
 ```
 
 ---
@@ -52,10 +52,10 @@ flowchart TB
 | **Factory**           | `src/core/driver-factory.ts`                  | Instantiate **`DesktopDriver`**; optionally wrap with **vision**           |
 | **Façade**            | `src/drivers/desktop/desktop-driver.ts`       | Route **`click`**, **`fill`**, **`getElements`**, … to the active adapter  |
 | **Adapter (macOS)**   | `src/drivers/desktop/macos-adapter.ts`        | AppleScript / System Events / Accessibility                                |
-| **Adapter (Windows)** | `src/drivers/desktop/windows-adapter.ts`      | UIA + PowerShell; optional **sidecar** RPC for Office/Graph/DPAPI          |
+| **Adapter (Windows)** | `src/drivers/desktop/windows-adapter.ts`      | UIA: **FlaUI** RPC when sidecar exe exists, else **PowerShell**; optional **sidecar** for Office/Graph/DPAPI          |
 | **POM base**          | `src/drivers/desktop/pom/desktop-page.ts`     | **`DesktopPage`** extends shared **`DriverPage`**                          |
 | **Vision**            | `src/vision/*`                                | Screenshot + LLM locate/describe; PID-aware bounds                         |
-| **Sidecar**           | `sidecar/OfficeInterop/*`, `dotnet-bridge.ts` | **Optional** isolated .NET process — not on critical path for UIA          |
+| **Sidecar**           | `sidecar/OfficeInterop/*`, `dotnet-bridge.ts` | **Optional** .NET process — **`uia.*`** (FlaUI) + Office/Graph/DPAPI; PS UIA if exe absent |
 | **MCP**               | `mcp/desktop-bridge.ts`                       | IDE/agent tools sharing adapters + vision                                  |
 
 ---
@@ -64,7 +64,7 @@ flowchart TB
 
 1. **Single test API** — `IDriver` keeps **`app.click(...)`** stable across macOS and Windows so POMs and patterns port.
 2. **Swap by config** — `playwright.config.ts` metadata changes behavior **without** `#ifdef` in every spec.
-3. **Contain OS entropy** — PowerShell quoting, UIA quirks, and COM lifetime rules stay inside **`WindowsAdapter`** / sidecar, not in tests.
+3. **Contain OS entropy** — PowerShell quoting, FlaUI/STA rules, UIA quirks, and COM lifetime stay inside **`WindowsAdapter`** / sidecar, not in tests.
 4. **Testability** — smaller units (adapter vs driver vs vision) than one monolith.
 
 ---
@@ -80,9 +80,9 @@ flowchart TB
 ### Windows
 
 - **Adapter:** `WindowsAdapter`
-- **Mechanisms:** UI Automation via **PowerShell** bridge in-repo, PID-based focus
+- **Mechanisms:** UI Automation — **FlaUI** (stdio RPC into `OfficeInterop.exe` when built) with **PowerShell UIA** fallback; PID-based focus; PowerShell / Win32 for window chrome and captures
 - **Typical selectors:** UIA **Name**, **AutomationId**, etc., normalized into `UIElement`
-- **Optional:** **`DotNetBridge`** spawns **`OfficeInterop.exe`** for COM/Graph/DPAPI only when called
+- **Optional:** **`DotNetBridge`** spawns **`OfficeInterop.exe`** for **`uia.*`** (FlaUI) and for COM/Graph/DPAPI when those APIs are used
 
 ---
 
@@ -111,9 +111,9 @@ flowchart TB
 | ---------------------------------------- | --------------------------------------------------------- |
 | `src/drivers/desktop/desktop-driver.ts`  | Chooses macOS vs Windows adapter; implements `IDriver`    |
 | `src/drivers/desktop/macos-adapter.ts`   | macOS implementation                                      |
-| `src/drivers/desktop/windows-adapter.ts` | Windows UIA/PowerShell + optional sidecar wrappers        |
-| `src/drivers/desktop/dotnet-bridge.ts`   | stdio JSON client for `OfficeInterop.exe`                 |
-| `sidecar/OfficeInterop/*`                | Optional .NET RPC server                                  |
+| `src/drivers/desktop/windows-adapter.ts` | Windows UIA (FlaUI-first + PS fallback), focus/screenshots; sidecar wrappers |
+| `src/drivers/desktop/dotnet-bridge.ts`   | stdio JSON client; **`isSidecarExecutablePresent()`** for probe-only checks |
+| `sidecar/OfficeInterop/*`                | Optional .NET RPC server (**FlaUIService**, Office, Graph, DPAPI)           |
 | `src/drivers/desktop/pom/*`              | Desktop POM bases                                         |
 | `mcp/desktop-bridge.ts`                  | MCP server (scan, elements, vision, POM, Office, secrets) |
 

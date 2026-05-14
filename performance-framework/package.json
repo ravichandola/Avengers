@@ -19,7 +19,10 @@
     "example:jsonplaceholder": "node --import tsx ./examples/run-jsonplaceholder-load.ts",
     "dev:smoke": "node --import tsx src/cli/perf.ts run:smoke",
     "cli": "node --import tsx src/cli/perf.ts",
-    "prepare": "npm run build:report-client"
+    "prepare": "npm run build:report-client",
+    "sidecar:build": "npm run sidecar:build --prefix ..",
+    "sidecar:clean": "npm run sidecar:clean --prefix ..",
+    "sidecar:ping": "npm run sidecar:ping --prefix .."
   },
   "engines": {
     "node": ">=20"

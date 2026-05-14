@@ -9,7 +9,7 @@ This guide is for you if you know **Playwright** or **testing** in general, but 
 | Topic                                      | Document                                                                              |
 | ------------------------------------------ | ------------------------------------------------------------------------------------- |
 | Windows-specific config, launch, runners   | [Windows — desktop automation](./windows.md)                                          |
-| Optional Office / Graph / DPAPI sidecar    | [.NET sidecar](./dotnet-sidecar.md)                                                   |
+| Optional FlaUI / Office / Graph / DPAPI sidecar    | [.NET sidecar](./dotnet-sidecar.md)                                                   |
 | Cursor MCP: scan app, AX tree, POM codegen | [Desktop bridge (MCP)](./mcp-bridge.md)                                               |
 | How `app` is created, `IDriver` contract   | [Fixtures & `IDriver`](../common/fixtures-and-idriver.md)                             |
 | Full stack diagram                         | [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows) |
@@ -27,7 +27,7 @@ This guide is for you if you know **Playwright** or **testing** in general, but 
 7. [Recommended workflow with Cursor (MCP)](#7-recommended-workflow-with-cursor-mcp)
 8. [Page objects (POM) on Windows](#8-page-objects-pom-on-windows)
 9. [Vision fallback (when AX is not enough)](#9-vision-fallback-when-ax-is-not-enough)
-10. [Office / email / secrets (optional sidecar)](#10-office--email--secrets-optional-sidecar)
+10. [FlaUI, Office, email, secrets (optional sidecar)](#10-flaui-office-email-secrets-optional-sidecar)
 11. [CI and runners](#11-ci-and-runners)
 12. [Troubleshooting cheat sheet](#12-troubleshooting-cheat-sheet)
 13. [Glossary](#13-glossary)
@@ -42,9 +42,9 @@ In **desktop-agent**, that work is done through:
 
 - **Playwright Test** — runs the spec file, reports results, parallel workers (same harness you use for browser tests).
 - **A desktop driver** — implements the shared **`IDriver`** contract (`click`, `fill`, `getTitle`, …).
-- **A Windows adapter** — translates those calls into **Windows UI Automation (UIA)** and **PowerShell** (implementation detail in `windows-adapter.ts`).
+- **A Windows adapter** — translates those calls into **Windows UI Automation (UIA)**: **FlaUI** inside the optional **.NET sidecar** when `OfficeInterop.exe` is built, otherwise **PowerShell** hosting the same UIA patterns (see `windows-adapter.ts`).
 
-You **do not** embed C# in your tests. You write **TypeScript**. Optional **.NET sidecar** processes exist only for **Office / Graph / DPAPI** (see [dotnet-sidecar.md](./dotnet-sidecar.md)).
+You **do not** embed C# in your tests. You write **TypeScript**. The **same** optional **.NET** process hosts **FlaUI (`uia.*` RPC)** and **Office / Graph / DPAPI** (see [dotnet-sidecar.md](./dotnet-sidecar.md)).
 
 ---
 
@@ -105,9 +105,10 @@ Think of data and commands flowing **down** from your test to the OS, and **stat
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  WINDOWS ADAPTER                                                        │
 │  src/drivers/desktop/windows-adapter.ts → WindowsAdapter                │
-│  UIA + PowerShell (+ optional lazy .NET sidecar for Office/DPAPI)       │
+│  UIA: FlaUI RPC when OfficeInterop.exe exists, else PowerShell UIA      │
+│  (+ optional same exe for Office / Graph / DPAPI)                       │
 │                                                                         │
-│  Reason: Node/TS cannot host Office COM or DPAPI cleanly; UIA via PS.   │
+│  Reason: Node hosts tests; FlaUI wants STA + .NET; PS UIA needs no exe. │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │
                                     ▼
@@ -120,11 +121,12 @@ Think of data and commands flowing **down** from your test to the OS, and **stat
 **Optional parallel branch (only when you call it):**
 
 ```text
-WindowsAdapter  ──lazy import──▶  dotnet-bridge.ts  ──stdio JSON──▶  OfficeInterop.exe
-                                                                 (Excel/Word/Graph/DPAPI)
+WindowsAdapter  ──loadDotNetBridge()──▶  dotnet-bridge.ts  ──stdio JSON──▶  OfficeInterop.exe
+        │                                              (FlaUI uia.* + Excel/Word/Graph/DPAPI)
+        └── when exe missing: UIA via PowerShell only
 ```
 
-That branch is **not** in the hot path for normal `click` / `fill` / Notepad tests.
+That branch is used for **core UIA** when the exe exists (FlaUI first), and for **Office/Graph/secrets** whenever you call those APIs (exe required).
 
 ---
 
@@ -136,9 +138,9 @@ That branch is **not** in the hot path for normal `click` / `fill` / Notepad tes
 | **Playwright project**        | Select **OS platform** (`desktop-windows`) and metadata   | Same spec file name can target macOS or Windows **by project**, not by edits |
 | **Fixtures (`app`)**          | **Lifecycle**: create driver, launch, dispose             | Prevents leaks; uniform `async ({ app })` ergonomics                         |
 | **DesktopDriver**             | Stable **`IDriver`** API for **both** macOS and Windows   | Tests stay portable at the **call** level                                    |
-| **WindowsAdapter**            | **Windows-only** primitives: find window, UIA tree, input | Encapsulates PowerShell / UIA quirks                                         |
+| **WindowsAdapter**            | **Windows-only** primitives: find window, UIA tree, input | **FlaUI** RPC or **PowerShell** UIA; encapsulates OS quirks                  |
 | **VisionProvider** (optional) | Screenshot + LLM for locate/describe                      | When AX names are missing or flaky                                           |
-| **DotNet sidecar** (optional) | Office COM, Graph, DPAPI                                  | Isolated process; not required for basic UI tests                            |
+| **DotNet sidecar** (optional) | FlaUI **STA** UIA, Office COM, Graph, DPAPI                 | One **`OfficeInterop.exe`**; PS-only UIA if exe absent                       |
 | **MCP desktop-bridge**        | **IDE-time** discovery and codegen                        | Humans/agents inspect live apps without writing boilerplate                  |
 
 ---
@@ -244,11 +246,16 @@ If **`click('Foo')`** keeps failing because the control has no stable UIA name, 
 
 ---
 
-## 10. Office / email / secrets (optional sidecar)
+## 10. FlaUI, Office, email, secrets (optional sidecar)
 
-**Not** required for Notepad-style UI tests.
+**Not** required to run simple UI tests: without a built exe, **`WindowsAdapter`** uses **PowerShell UIA** for tree and input.
 
-If you need **Excel file IO**, **Word PDF export**, **Graph mail**, or **DPAPI secret storage**, build the **.NET sidecar** and call **`getSidecar()`** or MCP tools **`office_action`** / **`manage_secret`**. Full detail: [dotnet-sidecar.md](./dotnet-sidecar.md).
+After **`npm run sidecar:build`**, the same **`OfficeInterop.exe`** serves:
+
+- **`uia.*`** — **FlaUI**-backed UIA used automatically by **`WindowsAdapter`** for **`getElements`**, **`click`**, **`fill`**, **`getText`**, **`isVisible`** (with PowerShell fallback on failure).
+- **Excel / Word / Graph / DPAPI** — only when you call typed helpers, **`getSidecar().call(...)`**, or MCP **`office_action`** / **`manage_secret`**.
+
+Full RPC list and protocol: [dotnet-sidecar.md](./dotnet-sidecar.md).
 
 ---
 
@@ -269,7 +276,7 @@ If you need **Excel file IO**, **Word PDF export**, **Graph mail**, or **DPAPI s
 | Clicks go to wrong window            | Focus race                        | Driver **auto-focuses** before actions; avoid overlapping manual clicks during tests         |
 | Works locally, fails in CI           | Headless / locked session         | Use interactive Windows agent                                                                |
 | Vision errors                        | Missing key / quota               | Set provider env vars; reduce vision usage                                                   |
-| Office tool errors                   | Sidecar not built                 | `npm run sidecar:build` on Windows                                                           |
+| Office / FlaUI RPC errors            | Sidecar not built or stale binary          | `npm run sidecar:build` on Windows; see [dotnet-sidecar § Troubleshooting](./dotnet-sidecar.md#13-troubleshooting) |
 
 ---
 
@@ -280,11 +287,11 @@ If you need **Excel file IO**, **Word PDF export**, **Graph mail**, or **DPAPI s
 | **UIA**              | UI Automation — Windows accessibility API for trees and patterns       |
 | **`IDriver`**        | Shared interface implemented by browser, desktop, mobile, API drivers  |
 | **`DesktopDriver`**  | Facade that picks **Mac** vs **Windows** adapter                       |
-| **`WindowsAdapter`** | Windows-specific UIA / PowerShell implementation                       |
+| **`WindowsAdapter`** | Windows UIA — **FlaUI** (sidecar) or **PowerShell**                    |
 | **Fixture `app`**    | Your test’s live driver instance (auto-closed after the test)          |
 | **`@app=` tag**      | Playwright title tag read by fixtures to choose launch name            |
 | **MCP**              | Model Context Protocol — IDE tools talking to `desktop-bridge.ts`      |
-| **Sidecar**          | Separate **OfficeInterop.exe** process for optional Office/Graph/DPAPI |
+| **Sidecar**          | **`OfficeInterop.exe`** — FlaUI **`uia.*`**, Office, Graph, DPAPI      |
 
 ---
 

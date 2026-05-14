@@ -4,7 +4,7 @@ Windows automation in this repository drives **native Windows applications** (Wi
 
 **New to Windows UI automation?** Read [**Windows automation from zero**](./windows-automation-from-zero.md) first — it explains layers, UIA, and how to write your first `*.desktop.spec.ts` in depth.
 
-**Office / Graph / DPAPI (optional):** [.NET sidecar](./dotnet-sidecar.md)
+**Office / Graph / DPAPI / FlaUI UIA (optional):** [.NET sidecar](./dotnet-sidecar.md)
 
 **Shared concepts:** [Fixtures & `IDriver`](../common/fixtures-and-idriver.md) · **Stack diagram:** [Architecture overview §13.2](../architecture/overview.md#132-desktop-macos--windows) · **Desktop stack:** [architecture/desktop.md](../architecture/desktop.md)
 
@@ -69,8 +69,9 @@ Data flows **down** from tests to the OS; elements, titles, and screenshots flow
                                     ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  WindowsAdapter (src/drivers/desktop/windows-adapter.ts)                │
-│  UIA + PowerShell; PID-scoped focus; optional vision hooks                │
-│  Optional: lazy .NET sidecar for Office / Graph / DPAPI (see §11)       │
+│  UIA: FlaUI via sidecar when OfficeInterop.exe exists, else PowerShell  │
+│  Focus / window chrome / screenshots: PowerShell + Win32 helpers       │
+│  Same sidecar process also serves Office / Graph / DPAPI (see §11)      │
 └───────────────────────────────────┬─────────────────────────────────────┘
                                     │
                                     ▼
@@ -89,9 +90,9 @@ Data flows **down** from tests to the OS; elements, titles, and screenshots flow
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | **`desktop-windows` project** | Ensures tests run with **`metadata.platform: 'windows'`** so the factory never accidentally instantiates `MacOSAdapter`. |
 | **`DesktopDriver`**           | Keeps **one** stable `IDriver` type for cross-platform desktop specs and shared POM bases.                               |
-| **`WindowsAdapter`**          | Centralizes all **Win32/UIA/PowerShell** quirks so tests never shell out directly.                                       |
+| **`WindowsAdapter`**          | **UIA** for tree + input: **FlaUI** (sidecar RPC) when `OfficeInterop.exe` exists, else **PowerShell**; **Win32** focus, screenshots, SendKeys stay in the adapter. |
 | **`VisionProvider`**          | Optional **screenshot + LLM** path when AX names are missing; used via driver wrapper / MCP tools.                       |
-| **`.NET sidecar`**            | Optional **COM + Graph + DPAPI** in an isolated process — see [dotnet-sidecar.md](./dotnet-sidecar.md).                  |
+| **`.NET sidecar`**            | **`OfficeInterop.exe`** — **FlaUI UIA3** (STA) plus optional **COM + Graph + DPAPI**. See [dotnet-sidecar.md](./dotnet-sidecar.md). |
 | **MCP bridge**                | **Human/agent** loop: inspect live tree, screenshot, codegen — faster than blind trial-and-error.                        |
 
 ---
@@ -101,7 +102,7 @@ Data flows **down** from tests to the OS; elements, titles, and screenshots flow
 1. **Windows host** — physical PC, VM, or Windows CI agent with an **interactive** session suitable for UIA (organization-dependent for headless CI).
 2. **Permissions** — the user running tests must be allowed to drive UI automation; avoid **locked** sessions if your stack requires a visible desktop.
 3. **PowerShell** — adapter runs encoded scripts; respect your org’s **execution policy** if locked down.
-4. **Optional .NET 8 SDK** — only if you use the [Office / Graph sidecar](./dotnet-sidecar.md).
+4. **Optional .NET 8 SDK** — required to **build** `OfficeInterop.exe`. You need a built exe for **FlaUI-backed** UIA (recommended on Windows agents) and for [Office / Graph / DPAPI](./dotnet-sidecar.md). Pure PowerShell UIA still works without building.
 
 ---
 
@@ -226,11 +227,16 @@ This reduces cross-app leakage when multiple windows overlap.
 
 ---
 
-## 11. Optional: .NET sidecar
+## 11. Optional: .NET sidecar (FlaUI + Office / Graph / DPAPI)
 
-For **Excel file operations**, **Word PDF export**, **Microsoft Graph mail**, or **DPAPI** secret storage, build **`OfficeInterop`** and use **`getSidecar()`**, **`WindowsAdapter`** typed helpers, or MCP **`office_action`** / **`manage_secret`**.
+The same **`OfficeInterop.exe`** process handles two concerns:
 
-**UI tests for ordinary apps do not need the sidecar.** See [.NET sidecar](./dotnet-sidecar.md).
+1. **FlaUI / UIA3** — When the binary exists, **`WindowsAdapter`** prefers **`uia.*`** RPC (STA thread, stable pattern APIs) for **`getElements`**, **`click`**, **`fill`**, **`getText`**, and **`isVisible`**, and **falls back to PowerShell** if the RPC is unavailable or errors.
+2. **Office, Graph, DPAPI** — Typed helpers and MCP tools (**`office_action`**, **`manage_secret`**) still **require** the sidecar and fail with a clear message if the exe is missing.
+
+**Build:** `npm run sidecar:build` on Windows. **Protocol and method tables:** [.NET sidecar](./dotnet-sidecar.md).
+
+You can run many **Notepad-style** UI tests **without** building the sidecar (PowerShell UIA path). Building is recommended for **FlaUI** behavior and required for **Excel/Word/Outlook/secrets** automation.
 
 ---
 
@@ -260,7 +266,7 @@ await app.fill("text_editor", "Hello from automation");
 | Runner is macOS / Linux | Only **`--project=desktop-windows`** on a **Windows** host drives UIA                                                           |
 | Element not found       | Dump **`getElements()`**; align string with **AutomationId** or **Name**                                                        |
 | Flaky focus             | Driver **auto-focuses** before `click` / `fill` / `keyPress` and verifies foreground **PID**                                    |
-| Sidecar errors          | Binary built? See **`npm run sidecar:build`** and [dotnet-sidecar.md § Troubleshooting](./dotnet-sidecar.md#13-troubleshooting) |
+| Sidecar errors / FlaUI fallback | Binary missing, or `uia.*` failed (see stderr)                                                                       | **`npm run sidecar:build`**; [dotnet-sidecar § Troubleshooting](./dotnet-sidecar.md#13-troubleshooting) |
 
 ---
 

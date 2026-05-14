@@ -13,8 +13,9 @@
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.13.*" />
     <PackageReference Include="ClosedXML" Version="0.102.*" />
+    <PackageReference Include="FlaUI.Core" Version="5.0.0" />
+    <PackageReference Include="FlaUI.UIA3" Version="5.0.0" />
     <PackageReference Include="Microsoft.Graph" Version="5.*" />
-    <PackageReference Include="Microsoft.Identity.Client" Version="4.*" />
     <PackageReference Include="Microsoft.Identity.Client" Version="4.*" />
     <PackageReference Include="Microsoft.Office.Interop.Excel" Version="15.0.4795.1001" />
     <PackageReference Include="Microsoft.Office.Interop.Word" Version="15.0.4795.1001" />

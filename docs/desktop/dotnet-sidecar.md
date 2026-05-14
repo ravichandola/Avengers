@@ -1,10 +1,10 @@
-# .NET sidecar — Office, Graph, and DPAPI automation
+# .NET sidecar — FlaUI (UIA), Office, Graph, and DPAPI
 
-This document describes the **optional** **.NET 8** sidecar (`OfficeInterop`) used for **Microsoft-specific** work that does not belong in the main **Node / TypeScript** automation path: **Excel** (file + live COM), **Word** COM, **Microsoft Graph** mail, and **DPAPI** secret storage.
+This document describes the **optional** **.NET 8** sidecar (`OfficeInterop.exe`): **UI Automation via FlaUI** (STA thread, UIA3), plus **Microsoft-specific** work that does not belong in the main **Node / TypeScript** path — **Excel** (file + live COM), **Word** COM, **Microsoft Graph** mail, and **DPAPI** secret storage.
 
-**It is not required** for normal **UI Automation** tests (Notepad, line-of-business Win32/WPF apps, `click` / `fill` / `getElements`, etc.). If the sidecar executable is missing, **only** sidecar entry points fail; **UIA + PowerShell + vision** keep working.
+**It is not required** to run desktop specs. If the executable is **missing**, **`WindowsAdapter`** keeps driving **UIA through PowerShell** for `getElements` / `click` / `fill` / `getText` / `isVisible`; **vision** and the rest of the stack are unchanged. If the executable is **present** (after `npm run sidecar:build`), those same calls **prefer FlaUI** over stdio RPC and **fall back to PowerShell** if a call fails. **Office / Graph / DPAPI** RPCs still **require** the built sidecar.
 
-**Audience:** engineers wiring **Office** workflows, **Graph** mail from tests or MCP, or **machine-local secret blobs** on Windows.
+**Audience:** engineers who want **FlaUI-backed UIA** in-process, or who wire **Office** workflows, **Graph** mail from tests or MCP, or **machine-local secret blobs** on Windows.
 
 **Beginner context:** [Windows automation from zero](./windows-automation-from-zero.md) · **MCP tools:** [Desktop bridge](./mcp-bridge.md) · **Windows UI:** [windows.md](./windows.md)
 
@@ -31,18 +31,19 @@ This document describes the **optional** **.NET 8** sidecar (`OfficeInterop`) us
 
 ## 1. Role in the architecture
 
-The repository splits **desktop UI** from **Office/COM/Graph/DPAPI** deliberately:
+The repository keeps **Node** lean while still allowing **STA-safe FlaUI** and **COM/DPAPI** in one optional Windows process:
 
-| Concern                                             | Primary implementation                              | Runs in         |
-| --------------------------------------------------- | --------------------------------------------------- | --------------- |
-| Window focus, UIA tree, SendKeys-style input        | `WindowsAdapter` + PowerShell                       | Node.js process |
-| Screenshot + multimodal locate/describe             | `VisionProvider`                                    | Node.js process |
-| Excel **workbook file** read/write without Excel UI | **ClosedXML** in sidecar                            | .NET process    |
-| Excel **macros**, Word automation                   | **COM interop** in sidecar                          | .NET process    |
-| Send mail / read inbox via **Graph API**            | **Microsoft.Graph** + **Azure.Identity** in sidecar | .NET process    |
-| Encrypt/decrypt with **user-scoped DPAPI**          | `ProtectedData` in sidecar                          | .NET process    |
+| Concern                                             | Primary implementation                                                                 | Runs in         |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------- |
+| UIA **tree read**, **click** / **fill** / **text** / visibility (PID-scoped) | **`WindowsAdapter`**: **FlaUI** RPC when `OfficeInterop.exe` exists, else **PowerShell UIA** | Node + optional .NET |
+| Window focus, window chrome, screenshots, SendKeys  | **`WindowsAdapter`** + PowerShell / Win32 helpers                                      | Node.js process |
+| Screenshot + multimodal locate/describe             | `VisionProvider`                                                                         | Node.js process |
+| Excel **workbook file** read/write without Excel UI | **ClosedXML** in sidecar                                                                 | .NET process    |
+| Excel **macros**, Word automation                   | **COM interop** in sidecar                                                               | .NET process    |
+| Send mail / read inbox via **Graph API**            | **Microsoft.Graph** + **Azure.Identity** in sidecar                                      | .NET process    |
+| Encrypt/decrypt with **user-scoped DPAPI**          | `ProtectedData` in sidecar                                                             | .NET process    |
 
-**Reason:** COM apartments, Office licensing, and DPAPI are **Windows-desktop concerns**. Spawning a **small executable** keeps the main TypeScript stack **cross-platform at build time** and avoids loading Office assemblies into **every** test worker.
+**Reason:** **FlaUI/UIA3** and **COM** want an **STA** thread and **.NET** assemblies; Node stays **cross-platform at build time**. One **stdio** child process hosts **FlaUIService** (always loaded when the exe runs) and **Office/Graph/DPAPI** handlers **on demand**.
 
 ---
 
@@ -67,15 +68,17 @@ flowchart TB
   end
   subgraph net [.NET 8 — optional]
     EXE[OfficeInterop.exe]
+    FU[FlaUIService — FlaUI UIA3 on STA queue]
     EX[ExcelService — ClosedXML + COM]
     WO[WordService — COM]
     OU[OutlookService — Graph SDK]
     SE[SecretsService — DPAPI]
   end
   WD --> WA
-  WA -. lazy dynamic import .-> DB
+  WA -. lazy loadDotNetBridge .-> DB
   MCP -. dynamic import .-> DB
   DB -->|spawn stdio| EXE
+  EXE --> FU
   EXE --> EX
   EXE --> WO
   EXE --> OU
@@ -85,7 +88,7 @@ flowchart TB
 **Ownership rules (as implemented):**
 
 - **`DesktopDriver`** does **not** know about the sidecar — keeps the façade stable.
-- **`WindowsAdapter`** exposes **typed** helpers that delegate to **`getSidecar().call(...)`** via **dynamic `import()`** so **`dotnet-bridge`** is not loaded on macOS bundles.
+- **`WindowsAdapter`** calls **`getSidecar().call('uia.*', …)`** for core UIA when the exe exists (shared **`loadDotNetBridge()`** cache), and **typed Office/secret** helpers the same way — **`dotnet-bridge`** is still loaded only via **dynamic `import()`** so macOS bundles do not pull Windows-only code at startup.
 - **MCP** tools call **`getSidecar()`** directly for agent-driven workflows.
 
 ---
@@ -142,6 +145,20 @@ flowchart TB
 
 ## 6. RPC methods reference
 
+### UI Automation (FlaUI)
+
+These methods run on a **single STA thread** inside the sidecar (`UiaStaQueue` + `UIA3Automation`). Selector semantics match the PowerShell helpers in `windows-uia-helpers.ts` (automation id first for actions, name-first for read, same pattern order for clicks).
+
+| Method              | Purpose                                      | Args                              | Returns (inside `data`)        |
+| ------------------- | -------------------------------------------- | --------------------------------- | ------------------------------ |
+| `uia.get_elements`   | BFS dump of UIA nodes under the app root     | `pid` (number), optional `max`    | Array of rows (`Id`, `Name`, `Type`, `LocalizedType`, `Enabled`, `Offscreen`, `X`, `Y`, `W`, `H`, `Value`, `ClassName`) — same shape as PowerShell JSON for `getElements` mapping |
+| `uia.click`        | Invoke / Toggle / ExpandCollapse / SelectionItem | `pid`, `selector` (string)        | `{ clicked: true }`            |
+| `uia.fill`         | `ValuePattern.SetValue` when writable        | `pid`, `selector`, `value`        | `{ filled: true }`             |
+| `uia.get_text`     | Value → Text pattern → Name                  | `pid`, `selector`                 | `{ text: string }`             |
+| `uia.is_visible`   | Exact find, then loose name/id contains      | `pid`, `selector`                 | `{ visible: boolean }`         |
+
+**Source:** `sidecar/OfficeInterop/Uia/FlaUIService.cs`, `UiaStaQueue.cs`, `UiaNative.cs`. **TypeScript** does not call these directly in tests — **`WindowsAdapter`** invokes them when `isSidecarExecutablePresent()` is true.
+
 ### Excel
 
 | Method             | Purpose                                                  | Notable args                   | Returns (inside `data`) |
@@ -191,6 +208,7 @@ flowchart TB
 
 - **`class DotNetBridge`** — `call(method, args)`, `dispose()`, `[Symbol.asyncDispose]`
 - **`getSidecar()`** — process-wide singleton (stateless RPC; one channel is enough)
+- **`isSidecarExecutablePresent()`** — synchronous check that **`OfficeInterop.exe`** exists on disk (publish or bin path). Does **not** start the process; used by **`WindowsAdapter`** to choose FlaUI vs PowerShell without spawning.
 
 **Executable resolution:** After `dotnet publish`, the bridge prefers:
 
@@ -210,11 +228,11 @@ Typed convenience methods live on **`WindowsAdapter`** (see below).
 
 ## 8. WindowsAdapter extensions
 
-**File:** `src/drivers/desktop/windows-adapter.ts` (additive section at end of class)
+**File:** `src/drivers/desktop/windows-adapter.ts`
 
-Examples: **`excelReadCell`**, **`wordExportPdf`**, **`secretsSave`**, **`outlookListInbox`**, …
+**FlaUI (built-in path):** For **`getElements`**, **`click`**, **`fill`**, **`getText`**, and **`isVisible`**, the adapter uses a **cached** **`loadDotNetBridge()`** promise. If **`isSidecarExecutablePresent()`** is true, it **`getSidecar().call('uia.*', …)`** first; on **`null`** or RPC failure it **falls back to PowerShell UIA** (same public behavior, different engine).
 
-Each uses **`await import('./dotnet-bridge')`** then **`getSidecar().call(...)`** so the bridge module loads **only** when you first touch Office/secret APIs.
+**Office / secrets (typed helpers at end of class):** **`excelReadCell`**, **`wordExportPdf`**, **`secretsSave`**, **`outlookListInbox`**, … — each uses the same **`loadDotNetBridge()`** then **`getSidecar().call(...)`** so the bridge loads when you first touch sidecar APIs (FlaUI or Office).
 
 ---
 
@@ -276,6 +294,7 @@ in **`office_action`** `args` (or extend your own harness) so the sidecar target
 | ------------------------------ | --------------------------------------------------- | ------------------------------------------------ |
 | `sidecar not found`            | No publish/build on this machine                    | Run **`npm run sidecar:build`** on Windows       |
 | `Sidecar did not signal ready` | Exe crashed on start (missing VC runtime, bad tfm)  | Run **`sidecar:ping`** in a console; read stderr |
+| FlaUI / `uia.*` always falls back to PowerShell | Stale exe before `uia.*` existed, or runtime UIA error | Rebuild sidecar; inspect **`[sidecar stderr]`** in the test process |
 | COM errors on macro / Word     | Office not installed / repair                       | Install Office; retry                            |
 | Graph 401/403                  | Wrong tenant/app registration or missing permission | Azure Portal: API permissions, admin consent     |
 | `Me` not allowed               | App-only context                                    | Add **`mailbox`** (see §11)                      |
@@ -287,15 +306,18 @@ in **`office_action`** `args` (or extend your own harness) so the sidecar target
 
 | Path                                         | Role                                           |
 | -------------------------------------------- | ---------------------------------------------- |
-| `sidecar/OfficeInterop/OfficeInterop.csproj` | SDK project, packages, `net8.0-windows`        |
-| `sidecar/OfficeInterop/Program.cs`           | stdin loop, dispatch, ready line               |
-| `sidecar/OfficeInterop/RpcRequest.cs`        | DTO for inbound line                           |
+| `sidecar/OfficeInterop/OfficeInterop.csproj` | SDK project, packages (`FlaUI.*`, Office, Graph), `net8.0-windows` |
+| `sidecar/OfficeInterop/Program.cs`           | stdin loop, dispatch, ready line             |
+| `sidecar/OfficeInterop/RpcRequest.cs`        | DTO for inbound line                         |
+| `sidecar/OfficeInterop/Uia/UiaStaQueue.cs`   | STA thread + `UIA3Automation` queue            |
+| `sidecar/OfficeInterop/Uia/UiaNative.cs`     | Per-monitor DPI awareness for UI work          |
+| `sidecar/OfficeInterop/Uia/FlaUIService.cs` | `uia.*` RPC handlers (find, patterns, collect) |
 | `sidecar/OfficeInterop/ExcelService.cs`      | ClosedXML + Excel COM macro                    |
 | `sidecar/OfficeInterop/WordService.cs`       | Word COM                                       |
 | `sidecar/OfficeInterop/OutlookService.cs`    | Graph + optional mailbox routing               |
 | `sidecar/OfficeInterop/SecretsService.cs`    | DPAPI file helpers                             |
-| `src/drivers/desktop/dotnet-bridge.ts`       | Spawn, queue, JSON lines                       |
-| `src/drivers/desktop/windows-adapter.ts`     | Typed wrappers + lazy import                   |
+| `src/drivers/desktop/dotnet-bridge.ts`       | Spawn, queue, JSON lines, exe presence helper  |
+| `src/drivers/desktop/windows-adapter.ts`     | FlaUI-first UIA + PS fallback; Office wrappers |
 | `mcp/desktop-bridge.ts`                      | **`office_action`**, **`manage_secret`** tools |
 
 ---

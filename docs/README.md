@@ -62,7 +62,7 @@ Welcome. This framework gives you **one TypeScript API** (`IDriver`) for **brows
 | [**macOS**](./desktop/macos.md)                                               | Native apps, Accessibility, launching apps                                                              |
 | [**Windows**](./desktop/windows.md)                                           | UIA / PowerShell, layers, sidecar pointer, Windows agents                                               |
 | [**Desktop bridge (MCP)**](./desktop/mcp-bridge.md)                           | MCP server — scan apps, AX tree, vision, generate POMs, Office/DPAPI tools                              |
-| [.NET sidecar](./desktop/dotnet-sidecar.md)                                   | Optional Office / Graph / DPAPI process and RPC                                                         |
+| [.NET sidecar](./desktop/dotnet-sidecar.md)                                   | FlaUI `uia.*`, optional Office / Graph / DPAPI process and RPC                                         |
 
 **Projects:** `desktop-macos`, `desktop-windows` · **specs:** `*.desktop.spec.ts`
 

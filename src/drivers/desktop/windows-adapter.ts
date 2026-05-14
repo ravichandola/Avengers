@@ -18,6 +18,13 @@ function runEncodedPowerShell(script: string): Promise<{ stdout: string }> {
   );
 }
 
+/** Lazy-loaded once — keeps `dotnet-bridge` off the critical path on non-Windows runtimes. */
+let dotNetBridgeModule: Promise<typeof import('./dotnet-bridge')> | null = null;
+function loadDotNetBridge(): Promise<typeof import('./dotnet-bridge')> {
+  dotNetBridgeModule ??= import('./dotnet-bridge');
+  return dotNetBridgeModule;
+}
+
 export class WindowsAdapter implements IDesktopAdapter {
   private appName: string = '';
   private pid: number | null = null;
@@ -365,6 +372,8 @@ public class DaShow {
     if (!this.pid) throw new Error('click(): adapter not connected');
     const needle = WindowsAdapter.resolveSelector(target);
     if (!needle) throw new Error('click(): empty selector');
+    const fl = await this.callFlaUiaRpc('uia.click', { pid: this.pid, selector: needle });
+    if (fl !== null) return;
     await withRetry(
       async () => {
         const needleB64 = WindowsAdapter.psUtf8B64(needle);
@@ -402,6 +411,8 @@ public class MouseOps {
     if (!this.pid) throw new Error('fill(): adapter not connected');
     const needle = WindowsAdapter.resolveSelector(target);
     if (!needle) throw new Error('fill(): empty selector');
+    const fl = await this.callFlaUiaRpc('uia.fill', { pid: this.pid, selector: needle, value });
+    if (fl !== null) return;
     await withRetry(
       async () => {
         const needleB64 = WindowsAdapter.psUtf8B64(needle);
@@ -424,6 +435,11 @@ Da-SetValue $el $val
     if (!this.pid) return '';
     const needle = WindowsAdapter.resolveSelector(target);
     if (!needle) return '';
+    const fl = await this.callFlaUiaRpc('uia.get_text', { pid: this.pid, selector: needle });
+    if (fl !== null && typeof fl === 'object' && fl !== null && 'text' in fl) {
+      const t = (fl as { text?: unknown }).text;
+      return t === undefined || t === null ? '' : String(t);
+    }
     const needleB64 = WindowsAdapter.psUtf8B64(needle);
     const script = `
 ${WINDOWS_UIA_HELPERS_PS1}
@@ -736,6 +752,14 @@ Write-Output $d
     }
 
     if (!this.pid) return [];
+    const fl = await this.callFlaUiaRpc('uia.get_elements', { pid: this.pid, max: limit });
+    if (Array.isArray(fl)) {
+      try {
+        return this.mapUiaSidecarRowsToElements(fl);
+      } catch (e) {
+        logger.warn('Windows', `getElements FlaUI mapping failed, using PowerShell: ${e}`);
+      }
+    }
     try {
       const script = `
 ${WINDOWS_UIA_HELPERS_PS1}
@@ -773,6 +797,10 @@ ConvertTo-Json -InputObject $rows -Depth 4 -Compress
 
   async isVisible(target: string): Promise<boolean> {
     if (!this.pid) return false;
+    const fl = await this.callFlaUiaRpc('uia.is_visible', { pid: this.pid, selector: target });
+    if (fl !== null && typeof fl === 'object' && fl !== null && 'visible' in fl) {
+      return Boolean((fl as { visible?: unknown }).visible);
+    }
     const needleB64 = WindowsAdapter.psUtf8B64(target);
     const script = `
 ${WINDOWS_UIA_HELPERS_PS1}
@@ -964,12 +992,81 @@ public class DaFocus {
     return runEncodedPowerShell(script);
   }
 
+  /**
+   * Optional FlaUI path: same `OfficeInterop.exe` sidecar, `uia.*` RPC on an STA FlaUI thread.
+   * When the executable is missing or the RPC fails, returns `null` so callers fall back to PowerShell UIA.
+   */
+  private async callFlaUiaRpc(
+    method: string,
+    args: Record<string, unknown>,
+  ): Promise<unknown | null> {
+    const { getSidecar, isSidecarExecutablePresent } = await loadDotNetBridge();
+    if (!isSidecarExecutablePresent()) return null;
+    try {
+      return await getSidecar().call(method, args);
+    } catch (e) {
+      logger.warn('Windows', `${method} (FlaUI sidecar) failed: ${e}`);
+      return null;
+    }
+  }
+
+  private mapUiaSidecarRowsToElements(rows: unknown[]): UIElement[] {
+    return rows.map((row: unknown, i: number): UIElement => {
+      const r = row as Record<string, unknown>;
+      const pick = (camel: string, pascal: string) => r[camel] ?? r[pascal];
+      const str = (camel: string, pascal: string): string | undefined => {
+        const v = pick(camel, pascal);
+        if (v === undefined || v === null) return undefined;
+        return String(v);
+      };
+      const num = (camel: string, pascal: string, def: number): number => {
+        const v = pick(camel, pascal);
+        if (typeof v === 'number' && !Number.isNaN(v)) return v;
+        if (typeof v === 'string') {
+          const n = parseFloat(v);
+          if (!Number.isNaN(n)) return n;
+        }
+        return def;
+      };
+      const bool = (camel: string, pascal: string, def: boolean): boolean => {
+        const v = pick(camel, pascal);
+        return typeof v === 'boolean' ? v : def;
+      };
+      const id = str('id', 'Id') ?? '';
+      const name = str('name', 'Name');
+      const type = str('type', 'Type') ?? '';
+      const localizedType = str('localizedType', 'LocalizedType');
+      const value = str('value', 'Value');
+      const className = str('className', 'ClassName');
+      const x = num('x', 'X', 0);
+      const y = num('y', 'Y', 0);
+      const w = num('w', 'W', 0);
+      const h = num('h', 'H', 0);
+      const enabled = bool('enabled', 'Enabled', true);
+      const offscreen = bool('offscreen', 'Offscreen', false);
+      return {
+        id: id || name || `uia-${i}`,
+        role: WindowsAdapter.normalizeUiaRole(type, localizedType),
+        name: name || undefined,
+        value: value || undefined,
+        bounds: { x, y, width: w, height: h },
+        isEnabled: enabled !== false,
+        isVisible: offscreen !== true && w > 0 && h > 0,
+        attributes: {
+          automationId: id || undefined,
+          className: className || undefined,
+          localizedType: localizedType || undefined,
+        },
+      };
+    });
+  }
+
   // ─── Sidecar-powered extensions ──────────────────────────────────────────────
   // These methods are additive — they do NOT replace existing UIA/PS methods.
   // Imported lazily so the sidecar module is never loaded on macOS.
 
   private async sidecar() {
-    const { getSidecar } = await import('./dotnet-bridge');
+    const { getSidecar } = await loadDotNetBridge();
     return getSidecar();
   }
 

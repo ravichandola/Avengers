@@ -221,7 +221,7 @@ export class NotesScreen extends DesktopPage {
 
 ### Tool 8: `office_action`
 
-**Run Office- or Graph-related actions** via the optional **.NET sidecar** (`OfficeInterop.exe`). UIA-based desktop tools (1–2) do **not** use this path.
+**Run Office- or Graph-related actions** via the optional **.NET sidecar** (`OfficeInterop.exe`). This targets **Excel / Word / Outlook** RPCs only. UIA discovery tools **1–7** use **`WindowsAdapter`** (FlaUI-backed UIA when `OfficeInterop.exe` is built, else PowerShell) and do **not** use the Office/Graph RPC surface.
 
 | Parameter | Type   | Description                                                                                                                                                             |
 | --------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

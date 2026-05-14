@@ -26,6 +26,11 @@ function resolveSidecarExe(): string {
   return buildExe;
 }
 
+/** True if `OfficeInterop.exe` exists (publish or bin). Does not start the process. */
+export function isSidecarExecutablePresent(): boolean {
+  return fs.existsSync(resolveSidecarExe());
+}
+
 /**
  * DotNetBridge — lazy, on-demand sidecar.
  *
@@ -33,7 +38,7 @@ function resolveSidecarExe(): string {
  * - The sidecar is NOT started at import time.
  * - It is started only on the first call() invocation.
  * - If the sidecar binary is absent, call() throws a clear error
- *   (existing UIA/PS automation is unaffected).
+ *   (PowerShell UIA in WindowsAdapter is unaffected; FlaUI path is skipped when the exe is missing).
  * - Dispose via bridge.dispose() or use `await using`.
  */
 export class DotNetBridge {
@@ -92,7 +97,7 @@ export class DotNetBridge {
       return;
     }
 
-    if (!fs.existsSync(this.sidecarPath)) {
+    if (!isSidecarExecutablePresent()) {
       this.startError = new Error(
         `DotNetBridge: sidecar not found at ${this.sidecarPath}. ` +
           `Run 'npm run sidecar:build' on Windows (.NET 8 SDK required).`,

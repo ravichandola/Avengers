@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using OfficeInterop;
+using OfficeInterop.Uia;
 
 var jsonOptions = new JsonSerializerOptions
 {
@@ -52,6 +53,11 @@ while (true)
             "outlook.list_inbox" => OutlookService.ListInbox(req.Args),
             "secrets.encrypt" => SecretsService.Encrypt(req.Args),
             "secrets.decrypt" => SecretsService.Decrypt(req.Args),
+            "uia.get_elements" => FlaUIService.GetElements(req.Args),
+            "uia.click" => FlaUIService.Click(req.Args),
+            "uia.fill" => FlaUIService.Fill(req.Args),
+            "uia.get_text" => FlaUIService.GetText(req.Args),
+            "uia.is_visible" => FlaUIService.IsVisible(req.Args),
             "ping" => new { pong = true },
             _ => throw new NotSupportedException($"Unknown method: {req.Method}"),
         };
